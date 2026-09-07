@@ -327,17 +327,15 @@ export function PlayingCard({
     .join(" ");
 
   return (
-    <svg
-      viewBox="0 0 100 140"
+    <span
       className={className}
       style={
         dealIndex !== undefined
           ? ({ "--i": dealIndex } as React.CSSProperties)
           : undefined
       }
-      role="img"
-      aria-label={cardName(card)}
     >
+    <svg viewBox="0 0 100 140" role="img" aria-label={cardName(card)}>
       <rect x="0" y="0" width="100" height="140" rx="9" fill="url(#cardFace)" />
       <rect x="0" y="0" width="100" height="72" rx="9" fill="url(#cardSheen)" />
       <rect
@@ -365,18 +363,15 @@ export function PlayingCard({
         ))}
       </g>
     </svg>
+    </span>
   );
 }
 
 /** A face-down card: lattice back, used for the crib and the opponent's hand. */
 export function CardBack({ size = "md" }: { size?: CardSize }) {
   return (
-    <svg
-      viewBox="0 0 100 140"
-      className={`pcard${SIZE_CLASS[size]}`}
-      role="img"
-      aria-label="face-down card"
-    >
+    <span className={`pcard pcard--back-stock${SIZE_CLASS[size]}`}>
+    <svg viewBox="0 0 100 140" role="img" aria-label="face-down card">
       <rect x="0" y="0" width="100" height="140" rx="9" fill="url(#backField)" />
       <rect x="5" y="5" width="90" height="130" rx="5" fill="url(#backLattice)" />
       <rect
@@ -404,6 +399,7 @@ export function CardBack({ size = "md" }: { size?: CardSize }) {
         strokeWidth="1.4"
       />
     </svg>
+    </span>
   );
 }
 

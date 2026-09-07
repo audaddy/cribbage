@@ -1,4 +1,8 @@
+"use client";
+
+import { useLayoutEffect, useRef } from "react";
 import type { Seat } from "@/lib/cribbage";
+import { usePrefersReducedMotion } from "./motion";
 
 /**
  * A cribbage board drawn as two serpentine tracks.
@@ -79,6 +83,73 @@ function holePoint(
   return [GAME_X, lane.back];
 }
 
+const PEG_TRAVEL_MS = 900;
+
+/**
+ * A peg travelling its lane.
+ *
+ * The movement is driven explicitly through the Web Animations API rather than
+ * left to a CSS transition on `offset-distance`: that transition is patchily
+ * supported (Safari in particular), and this is the one animation in the app
+ * that carries information — how far the score just moved. Animating it by
+ * hand means it either runs or it does not, and it can be verified.
+ *
+ * The peg group rides the motion path; the body inside lifts out of its hole
+ * and drops into the new one on the way.
+ */
+function Peg({
+  path,
+  distance,
+  color,
+  highlight,
+}: {
+  path: string;
+  distance: number;
+  color: string;
+  highlight: string;
+}) {
+  const group = useRef<SVGGElement>(null);
+  const body = useRef<SVGGElement>(null);
+  const previous = useRef(distance);
+  const reduced = usePrefersReducedMotion();
+
+  useLayoutEffect(() => {
+    const from = previous.current;
+    previous.current = distance;
+    if (from === distance || reduced) return;
+
+    group.current?.animate(
+      [{ offsetDistance: `${from}px` }, { offsetDistance: `${distance}px` }],
+      { duration: PEG_TRAVEL_MS, easing: "cubic-bezier(0.34, 0.8, 0.3, 1)" },
+    );
+
+    body.current?.animate(
+      [
+        { transform: "translateY(0) scale(1)" },
+        { transform: "translateY(-7px) scale(1.18)", offset: 0.22 },
+        { transform: "translateY(-7px) scale(1.18)", offset: 0.72 },
+        { transform: "translateY(0) scale(1)" },
+      ],
+      { duration: PEG_TRAVEL_MS, easing: "ease-in-out" },
+    );
+  }, [distance, reduced]);
+
+  return (
+    <g
+      ref={group}
+      className="peg peg--front"
+      style={{ offsetPath: `path("${path}")`, offsetDistance: `${distance}px` }}
+    >
+      <g ref={body} className="peg-body">
+        <ellipse cx="0.8" cy="2.4" rx="5" ry="2.2" fill="rgb(0 0 0 / 0.35)" />
+        <circle r="5" fill={color} stroke="rgb(0 0 0 / 0.4)" strokeWidth="0.9" />
+        <circle cx="-1.4" cy="-1.6" r="1.8" fill={highlight} />
+        <circle cx="-1.9" cy="-2.1" r="0.8" fill="rgb(255 255 255 / 0.75)" />
+      </g>
+    </g>
+  );
+}
+
 interface CribbageBoardProps {
   names: [string, string];
   scores: [number, number];
@@ -86,7 +157,7 @@ interface CribbageBoardProps {
   you: Seat;
   target: number;
   winnerSeat: Seat | null;
-  /** Seat whose score just changed, for the pop animation. */
+  /** Seat whose score just changed, for the score-number pop. */
   bumped?: Seat | null;
 }
 
@@ -233,12 +304,32 @@ export function CribbageBoard({
 
             return (
               <g key={seat}>
-                {/* The carved groove the pegs travel down. */}
+                {/* A routed channel: the lower lip catches the light, the
+                    channel itself is in shadow, and a soft sheen sits along
+                    the bottom of the cut. */}
+                <path
+                  d={path}
+                  transform="translate(0 1.4)"
+                  fill="none"
+                  stroke="rgb(255 235 200 / 0.16)"
+                  strokeWidth="15"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
                 <path
                   d={path}
                   fill="none"
                   stroke="rgb(0 0 0 / 0.3)"
                   strokeWidth="15"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
+                <path
+                  d={path}
+                  transform="translate(0 -0.9)"
+                  fill="none"
+                  stroke="rgb(0 0 0 / 0.22)"
+                  strokeWidth="13"
                   strokeLinecap="round"
                   strokeLinejoin="round"
                 />
@@ -343,27 +434,13 @@ export function CribbageBoard({
                   </g>
                 )}
 
-                {/* Front peg: the current score. The group rides the motion
-                    path; the body inside hops as it goes. */}
-                <g
-                  className={`peg peg--front${bumped === seat ? " peg--hopping" : ""}`}
-                  style={{
-                    offsetPath: `path("${path}")`,
-                    offsetDistance: `${distanceFor(scores[seat])}px`,
-                  }}
-                >
-                  <g className="peg-body">
-                    <ellipse cx="0.8" cy="2.4" rx="5" ry="2.2" fill="rgb(0 0 0 / 0.35)" />
-                    <circle
-                      r="5"
-                      fill={pegColor(seat)}
-                      stroke="rgb(0 0 0 / 0.4)"
-                      strokeWidth="0.9"
-                    />
-                    <circle cx="-1.4" cy="-1.6" r="1.8" fill={pegHighlight(seat)} />
-                    <circle cx="-1.9" cy="-2.1" r="0.8" fill="rgb(255 255 255 / 0.75)" />
-                  </g>
-                </g>
+                {/* Front peg: the current score. */}
+                <Peg
+                  path={path}
+                  distance={distanceFor(scores[seat])}
+                  color={pegColor(seat)}
+                  highlight={pegHighlight(seat)}
+                />
               </g>
             );
           })}
