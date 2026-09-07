@@ -1,0 +1,139 @@
+// Cribbage — data model
+//
+// Provider note:
+//   Local development defaults to SQLite (zero setup).
+//   For production, change `provider` to "postgresql" and point DATABASE_URL at
+//   your Postgres/Supabase/Neon instance, then run `npx prisma migrate deploy`.
+//   Every column type used here is portable across both providers (no Prisma
+//   enums, no native JSON — structured payloads are stored as JSON strings).
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+/// A player. Identity is an email address; there are no passwords.
+model User {
+  id          String   @id @default(cuid())
+  email       String   @unique
+  displayName String
+  createdAt   DateTime @default(now())
+
+  gamesAsPlayer0 Game[]         @relation("Player0")
+  gamesAsPlayer1 Game[]         @relation("Player1")
+  notifications  Notification[]
+
+  @@index([displayName])
+}
+
+/// Single-use magic-link token. Only the SHA-256 hash is stored, so a database
+/// leak cannot be replayed into a login.
+model LoginToken {
+  id         String    @id @default(cuid())
+  tokenHash  String    @unique
+  email      String
+  createdAt  DateTime  @default(now())
+  expiresAt  DateTime
+  consumedAt DateTime?
+
+  @@index([email])
+  @@index([expiresAt])
+}
+
+/// One match between two players. `state` holds the authoritative, full game
+/// state as JSON; the scalar columns beside it are denormalized projections so
+/// the lobby can be listed without deserializing every game.
+model Game {
+  id         String @id @default(cuid())
+  inviteCode String @unique
+
+  player0Id String
+  player0   User   @relation("Player0", fields: [player0Id], references: [id], onDelete: Cascade)
+  player1Id String?
+  player1   User?  @relation("Player1", fields: [player1Id], references: [id], onDelete: Cascade)
+
+  /// "awaiting_opponent" | "active" | "complete"
+  status String @default("awaiting_opponent")
+  /// Engine phase: "awaiting_opponent" | "discard" | "pegging" | "counting" | "complete"
+  phase  String @default("awaiting_opponent")
+
+  /// Bitmask of seats that may act right now: bit 0 for seat 0, bit 1 for
+  /// seat 1. Discarding is simultaneous, so both bits can be set; a finished
+  /// game sets none. Lets the lobby answer "is it my turn?" without
+  /// deserializing the state blob.
+  pendingMask Int @default(0)
+  dealerSeat  Int @default(0)
+  score0     Int  @default(0)
+  score1     Int  @default(0)
+  handNumber Int  @default(0)
+  winnerSeat Int?
+
+  /// Serialized GameState (see src/lib/cribbage/types.ts).
+  state String
+
+  /// Monotonic counter bumped on every applied action; used for optimistic
+  /// concurrency so two tabs cannot apply the same move twice.
+  version Int @default(0)
+
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  lastMoveAt  DateTime  @default(now())
+  completedAt DateTime?
+
+  events        GameEvent[]
+  notifications Notification[]
+
+  @@index([player0Id, status])
+  @@index([player1Id, status])
+  @@index([status, lastMoveAt])
+}
+
+/// Append-only action log powering the in-game history panel.
+model GameEvent {
+  id     String @id @default(cuid())
+  gameId String
+  game   Game   @relation(fields: [gameId], references: [id], onDelete: Cascade)
+
+  /// Position in the log, unique per game.
+  seq  Int
+  /// Seat that caused the event, or null for engine/system events.
+  seat Int?
+  /// "deal" | "discard" | "cut" | "play" | "go" | "peg" | "show" | "win"
+  type String
+  /// Human-readable line rendered in the history panel.
+  message String
+  /// Points awarded by this event, if any.
+  points  Int?
+  /// Optional JSON payload (scoring breakdowns, played card, running total).
+  detail  String?
+  /// Hand number this event belongs to, for grouping in the UI.
+  handNumber Int @default(0)
+
+  createdAt DateTime @default(now())
+
+  @@unique([gameId, seq])
+  @@index([gameId, seq])
+}
+
+/// Records that a "it's your turn" notification was dispatched, so the same
+/// turn never notifies twice.
+model Notification {
+  id     String @id @default(cuid())
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  gameId String
+  game   Game   @relation(fields: [gameId], references: [id], onDelete: Cascade)
+
+  /// "your_turn" | "game_over" | "invite_accepted"
+  type String
+  /// Game version at dispatch time — the dedupe key.
+  gameVersion Int
+  sentAt      DateTime @default(now())
+
+  @@unique([gameId, userId, type, gameVersion])
+  @@index([userId, sentAt])
+}

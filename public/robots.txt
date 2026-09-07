@@ -1,0 +1,5 @@
+User-agent: *
+Disallow: /games/
+Disallow: /join/
+Disallow: /api/
+Allow: /
