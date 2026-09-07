@@ -463,6 +463,8 @@ input {
   color: var(--felt-ink);
   background:
     radial-gradient(120% 80% at 50% -15%, rgb(255 255 255 / 0.12), transparent 58%),
+    /* Cloth wears brighter where hands rest. */
+    radial-gradient(66% 52% at 50% 60%, rgb(255 255 255 / 0.05), transparent 72%),
     radial-gradient(110% 130% at 50% 125%, rgb(0 0 0 / 0.4), transparent 62%),
     linear-gradient(168deg, var(--felt) 0%, var(--felt-deep) 58%, var(--felt-edge) 100%);
   box-shadow:
@@ -478,10 +480,16 @@ input {
   inset: 0;
   z-index: -1;
   border-radius: inherit;
-  opacity: 0.24;
+  /* Baize has a nap, not a weave — two turbulence passes at different
+     frequencies read as fibre. An actual grid reads as graph paper. */
+  opacity: 0.3;
   mix-blend-mode: overlay;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cfilter id='f'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='120' height='120' filter='url(%23f)'/%3E%3C/svg%3E");
+  background-image:
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n1'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='1.1' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='140' height='140' filter='url(%23n1)'/%3E%3C/svg%3E"),
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n2'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.28' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='140' height='140' filter='url(%23n2)' opacity='0.55'/%3E%3C/svg%3E");
+  background-size: 140px 140px, 200px 200px;
 }
+
 
 /* Stitched leather edge. */
 .table::after {
@@ -724,10 +732,14 @@ input {
   background:
     linear-gradient(160deg, var(--wood-light), var(--wood) 44%, var(--wood-deep));
   box-shadow:
-    var(--shadow-md),
+    /* The thickness of the board, seen at its bottom edge. */
+    0 3px 0 var(--wood-deep),
+    0 5px 1px rgb(30 16 4 / 0.5),
+    0 14px 26px rgb(25 15 5 / 0.4),
     inset 0 1px 0 rgb(255 255 255 / 0.24),
     inset 0 -2px 5px rgb(0 0 0 / 0.34),
     inset 0 0 0 1px rgb(0 0 0 / 0.28);
+  margin-bottom: 5px;
 }
 
 /* Wood grain: turbulence stretched hard along one axis, which is what gives
