@@ -1,13 +1,19 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import Link from "next/link";
 import type { GameDetail, MoveRequest } from "@/lib/api-types";
-import { type Card, type Seat, cardLabel } from "@/lib/cribbage";
+import { type Card, type PlayedCard as PlayedCardState, type Seat, cardLabel } from "@/lib/cribbage";
 import { CribbageBoard } from "./CribbageBoard";
 import { HistoryLog } from "./HistoryLog";
 import { CardBack, PlayingCard, cardName } from "./PlayingCard";
-import { Burst, Confetti, useCountUp, useIsClient } from "./motion";
+import {
+  Burst,
+  Confetti,
+  useCountUp,
+  useIsClient,
+  usePrefersReducedMotion,
+} from "./motion";
 
 /** Poll faster while waiting on the opponent than while the board is yours. */
 const POLL_WAITING_MS = 6000;
@@ -40,6 +46,8 @@ export function GameClient({ initial }: { initial: GameDetail }) {
   const detailRef = useRef(detail);
   const scoresRef = useRef(detail.view.scores);
   const toastId = useRef(0);
+  /** Where a card sat in the hand at the moment it was played. */
+  const [flight, setFlight] = useState<CardFlight | null>(null);
   const handRef = useRef(detail.view.handNumber);
   const wasYourTurn = useRef(detail.view.isYourTurn);
 
@@ -137,6 +145,9 @@ export function GameClient({ initial }: { initial: GameDetail }) {
     if (handRef.current !== view.handNumber) {
       handRef.current = view.handNumber;
       setDealing(true);
+      // Cards are reshuffled, so a remembered position is meaningless — and
+      // the same card code could reappear and fly from the wrong place.
+      setFlight(null);
     }
   }, [view.handNumber]);
 
@@ -369,7 +380,7 @@ export function GameClient({ initial }: { initial: GameDetail }) {
                       </span>
                     ))}
               </div>
-              <PlayArea view={view} names={names} />
+              <PlayArea view={view} names={names} flight={flight} />
             </div>
 
             <div className="table-row">
@@ -453,6 +464,7 @@ export function GameClient({ initial }: { initial: GameDetail }) {
                       type="button"
                       className={`hand-card${dealing ? " hand-card--dealing" : ""}`}
                       style={fan}
+                      data-card={card}
                       data-selected={selected.includes(card)}
                       disabled={!selectable(card)}
                       aria-pressed={selected.includes(card)}
@@ -489,7 +501,11 @@ export function GameClient({ initial }: { initial: GameDetail }) {
                   cards: [selected[0]!, selected[1]!] as [string, string],
                 })
               }
-              onPlay={() => void submit({ type: "play", card: selected[0]! })}
+              onPlay={() => {
+                const card = selected[0]!;
+                setFlight(captureFlight(card));
+                void submit({ type: "play", card });
+              }}
               onCount={() => void submit({ type: "count" })}
             />
           </section>
@@ -543,6 +559,83 @@ export function GameClient({ initial }: { initial: GameDetail }) {
 
 // --- sub-components --------------------------------------------------------
 
+/** Where a card was on screen when it left the hand. */
+interface CardFlight {
+  card: Card;
+  left: number;
+  top: number;
+  width: number;
+}
+
+/**
+ * Measures a card in the hand before it is played, so the copy that appears on
+ * the table can be animated back to that spot and then flown into place.
+ * Returns null if the element cannot be found — the card simply appears.
+ */
+function captureFlight(card: Card): CardFlight | null {
+  if (typeof document === "undefined") return null;
+  const element = document.querySelector(`[data-card="${CSS.escape(card)}"]`);
+  if (!element) return null;
+  const rect = element.getBoundingClientRect();
+  return { card, left: rect.left, top: rect.top, width: rect.width };
+}
+
+/**
+ * One card on the table. When it is the card that was just played, it starts
+ * from where it sat in the hand and travels to its place in the row — the
+ * gesture of laying a card down, rather than one blinking into existence.
+ */
+function PlayedCard({
+  played,
+  current,
+  owner,
+  ownerName,
+  flight,
+}: {
+  played: PlayedCardState;
+  current: boolean;
+  owner: string;
+  ownerName: string;
+  flight: CardFlight | null;
+}) {
+  const ref = useRef<HTMLDivElement>(null);
+  const reduced = usePrefersReducedMotion();
+  const flown = useRef(false);
+
+  useLayoutEffect(() => {
+    if (!flight || flown.current || reduced) return;
+    const element = ref.current;
+    if (!element) return;
+    flown.current = true;
+
+    const now = element.getBoundingClientRect();
+    const dx = flight.left - now.left;
+    const dy = flight.top - now.top;
+    const scale = now.width > 0 ? flight.width / now.width : 1;
+
+    element.animate(
+      [
+        { transform: `translate(${dx}px, ${dy}px) scale(${scale})`, opacity: 0.85 },
+        { transform: "none", opacity: 1 },
+      ],
+      { duration: 460, easing: "cubic-bezier(0.22, 0.75, 0.28, 1)" },
+    );
+  }, [flight, reduced]);
+
+  return (
+    <div ref={ref} className={`played${current ? " played--current" : ""}`}>
+      <PlayingCard card={played.card} size="sm" laid={!flight} />
+      <span className="played-owner" style={{ background: owner }} aria-hidden="true" />
+      <span
+        className="played-total"
+        title={`${ownerName} — running total ${played.total}`}
+      >
+        {played.total}
+      </span>
+    </div>
+  );
+}
+
 /**
  * The running count, rolled rather than snapped: watching 22 climb to 27 is
  * how you read what just happened without going to the log.
@@ -588,9 +681,11 @@ function marginLabel(scores: [number, number], winner: Seat): string {
 function PlayArea({
   view,
   names,
+  flight,
 }: {
   view: GameDetail["view"];
   names: [string, string];
+  flight: CardFlight | null;
 }) {
   const history = view.play.history;
   if (history.length === 0) {
@@ -604,30 +699,22 @@ function PlayArea({
   }
 
   const currentFrom = history.length - view.play.sequence.length;
+  const lastIndex = history.length - 1;
 
   return (
     <div className="card-strip card-strip--tight">
       {history.map((played, index) => (
-        <div
+        <PlayedCard
           key={`${played.card}-${index}`}
-          className={`played${index >= currentFrom ? " played--current" : ""}`}
-        >
-          <PlayingCard card={played.card} size="sm" laid />
-          {/* Whose card this was, without having to read the log. */}
-          <span
-            className="played-owner"
-            style={{
-              background: played.seat === 0 ? "var(--p0)" : "var(--p1)",
-            }}
-            aria-hidden="true"
-          />
-          <span
-            className="played-total"
-            title={`${names[played.seat]} — running total ${played.total}`}
-          >
-            {played.total}
-          </span>
-        </div>
+          played={played}
+          current={index >= currentFrom}
+          owner={played.seat === 0 ? "var(--p0)" : "var(--p1)"}
+          ownerName={names[played.seat]}
+          // Only the card that just left this player's hand flies.
+          flight={
+            index === lastIndex && flight?.card === played.card ? flight : null
+          }
+        />
       ))}
     </div>
   );
