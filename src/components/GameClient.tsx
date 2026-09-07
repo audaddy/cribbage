@@ -213,10 +213,28 @@ export function GameClient({ initial }: { initial: GameDetail }) {
   const isCounting = view.phase === "counting" && view.isYourTurn;
   const gameOver = view.phase === "complete";
 
-  const handCards = view.phase === "pegging" ? view.unplayed : view.hand;
   const playable = new Set(view.legalPlays);
   /** Only offer the hand as controls when there is actually a choice to make. */
   const interactive = isDiscard || isPegging;
+
+  const counting = view.phase === "counting";
+  const countingCrib = counting && view.countIndex === 2;
+
+  // While counting, show exactly what is being counted — the four cards plus
+  // the cut — so the player can add it up without looking in two places.
+  const baseCards =
+    countingCrib && view.crib
+      ? view.crib
+      : view.phase === "pegging"
+        ? view.unplayed
+        : view.hand;
+  const handCards =
+    counting && view.starter ? [...baseCards, view.starter] : baseCards;
+  const handLabel = countingCrib
+    ? "Your crib and the cut"
+    : counting
+      ? "Your hand and the cut"
+      : "Your hand";
 
   const selectable = (card: Card) => {
     if (busy) return false;
@@ -311,7 +329,8 @@ export function GameClient({ initial }: { initial: GameDetail }) {
                       <div className="flip-face">
                         <PlayingCard card={view.starter} starter />
                       </div>
-                      <div className="flip-face flip-face--back">
+                      {/* The reverse of the flip: decoration, not a second card. */}
+                      <div className="flip-face flip-face--back" aria-hidden="true">
                         <CardBack />
                       </div>
                     </div>
@@ -393,9 +412,9 @@ export function GameClient({ initial }: { initial: GameDetail }) {
             </div>
           </section>
 
-          <section className="panel panel-pad stack-sm" aria-label="Your hand">
+          <section className="panel panel-pad stack-sm" aria-label={handLabel}>
             <div className="row">
-              <span className="panel-title">Your hand</span>
+              <span className="panel-title">{handLabel}</span>
               {isDiscard && (
                 <span className="small muted">
                   {selected.length}/2 selected for the crib
@@ -449,7 +468,7 @@ export function GameClient({ initial }: { initial: GameDetail }) {
                       className={`hand-card${dealing ? " hand-card--dealing" : ""}`}
                       style={fan}
                     >
-                      <PlayingCard card={card} />
+                      <PlayingCard card={card} starter={counting && card === view.starter} />
                     </span>
                   );
                 })}

@@ -1088,16 +1088,6 @@ details.disclosure[open] > summary::before { content: "▾ "; }
   .score-value { font-size: 1.45rem; }
 }
 
-@media (prefers-reduced-motion: reduce) {
-  *,
-  *::before,
-  *::after {
-    animation-duration: 0.001ms !important;
-    animation-iteration-count: 1 !important;
-    transition-duration: 0.001ms !important;
-    scroll-behavior: auto !important;
-  }
-}
 
 /* --- board pegs --------------------------------------------------------- */
 
@@ -1109,10 +1099,6 @@ details.disclosure[open] > summary::before { content: "▾ "; }
 }
 
 .peg--back { transition-duration: 0.45s; }
-
-@media (prefers-reduced-motion: reduce) {
-  .peg { transition: none; }
-}
 
 .board-shell { position: relative; }
 
@@ -1558,3 +1544,24 @@ details.disclosure[open] > summary::before { content: "▾ "; }
 }
 
 .hand--tiny .hand-card { margin-inline: -9px; }
+
+/* ==========================================================================
+   Reduced motion
+
+   Last in the file, and !important besides, so it wins over every animation
+   and transition declared above no matter where they were added.
+   ========================================================================== */
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+  }
+
+  .peg { transition: none; }
+  .hand:hover .hand-card { --spread: 1; }
+}
