@@ -124,6 +124,24 @@ async function main() {
     "a new game waits for an opponent",
   );
 
+  console.log("→ the invite link works for a signed-out visitor");
+  const anonymous = await fetch(`${BASE}/join/${created.inviteCode}`, {
+    redirect: "manual",
+  });
+  assert(
+    anonymous.status === 200,
+    `invite page renders without a session (got ${anonymous.status})`,
+  );
+  const invitePage = await anonymous.text();
+  assert(
+    invitePage.includes("Join the game"),
+    "invite page offers to seat the visitor",
+  );
+  assert(
+    !invitePage.includes("Email me a sign-in link"),
+    "invite page does not force a sign-in first",
+  );
+
   console.log("→ opponent accepts");
   const joined = await bob.json("/api/games/join", {
     method: "POST",

@@ -1,26 +1,34 @@
 // Cribbage — data model
 //
 // Provider note:
-//   Local development defaults to SQLite (zero setup).
-//   For production, change `provider` to "postgresql" and point DATABASE_URL at
-//   your Postgres/Supabase/Neon instance, then run `npx prisma migrate deploy`.
-//   Every column type used here is portable across both providers (no Prisma
-//   enums, no native JSON — structured payloads are stored as JSON strings).
+//   Production runs on Postgres, and prisma/migrations is generated for it.
+//   For a zero-setup local database instead, run:
+//     npm run db:use sqlite && npm run db:push
+//   `db push` needs no migrations, so the two providers do not conflict. Every
+//   column type here is portable across both (no Prisma enums, no native JSON —
+//   structured payloads are stored as JSON strings).
 
 generator client {
   provider = "prisma-client-js"
 }
 
 datasource db {
-  provider = "sqlite"
+  provider = "postgresql"
   url      = env("DATABASE_URL")
 }
 
-/// A player. Identity is an email address; there are no passwords.
+/// A player. There are no passwords.
+///
+/// Accounts arrive one of two ways: an emailed magic link, or accepting an
+/// invite link, which seats a guest immediately with no email at all. A guest
+/// is identified purely by their session cookie, so `email` is null until they
+/// choose to attach one.
 model User {
   id          String   @id @default(cuid())
-  email       String   @unique
+  email       String?  @unique
   displayName String
+  /// True until the account has an email attached to it.
+  isGuest     Boolean  @default(true)
   createdAt   DateTime @default(now())
 
   gamesAsPlayer0 Game[]         @relation("Player0")
@@ -52,9 +60,9 @@ model Game {
   inviteCode String @unique
 
   player0Id String
-  player0   User   @relation("Player0", fields: [player0Id], references: [id], onDelete: Cascade)
+  player0   User    @relation("Player0", fields: [player0Id], references: [id], onDelete: Cascade)
   player1Id String?
-  player1   User?  @relation("Player1", fields: [player1Id], references: [id], onDelete: Cascade)
+  player1   User?   @relation("Player1", fields: [player1Id], references: [id], onDelete: Cascade)
 
   /// "awaiting_opponent" | "active" | "complete"
   status String @default("awaiting_opponent")
@@ -65,12 +73,12 @@ model Game {
   /// seat 1. Discarding is simultaneous, so both bits can be set; a finished
   /// game sets none. Lets the lobby answer "is it my turn?" without
   /// deserializing the state blob.
-  pendingMask Int @default(0)
-  dealerSeat  Int @default(0)
-  score0     Int  @default(0)
-  score1     Int  @default(0)
-  handNumber Int  @default(0)
-  winnerSeat Int?
+  pendingMask Int  @default(0)
+  dealerSeat  Int  @default(0)
+  score0      Int  @default(0)
+  score1      Int  @default(0)
+  handNumber  Int  @default(0)
+  winnerSeat  Int?
 
   /// Serialized GameState (see src/lib/cribbage/types.ts).
   state String
@@ -99,19 +107,19 @@ model GameEvent {
   game   Game   @relation(fields: [gameId], references: [id], onDelete: Cascade)
 
   /// Position in the log, unique per game.
-  seq  Int
+  seq        Int
   /// Seat that caused the event, or null for engine/system events.
-  seat Int?
+  seat       Int?
   /// "deal" | "discard" | "cut" | "play" | "go" | "peg" | "show" | "win"
-  type String
+  type       String
   /// Human-readable line rendered in the history panel.
-  message String
+  message    String
   /// Points awarded by this event, if any.
-  points  Int?
+  points     Int?
   /// Optional JSON payload (scoring breakdowns, played card, running total).
-  detail  String?
+  detail     String?
   /// Hand number this event belongs to, for grouping in the UI.
-  handNumber Int @default(0)
+  handNumber Int     @default(0)
 
   createdAt DateTime @default(now())
 
@@ -129,7 +137,7 @@ model Notification {
   game   Game   @relation(fields: [gameId], references: [id], onDelete: Cascade)
 
   /// "your_turn" | "game_over" | "invite_accepted"
-  type String
+  type        String
   /// Game version at dispatch time — the dedupe key.
   gameVersion Int
   sentAt      DateTime @default(now())

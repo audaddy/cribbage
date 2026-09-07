@@ -76,7 +76,8 @@ export async function notify({
     );
   }
 
-  if (env.email) {
+  // A guest has no email; the webhook is still fired for them.
+  if (env.email && recipient.email) {
     tasks.push(
       sendEmail({
         to: recipient.email,

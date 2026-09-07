@@ -4,12 +4,18 @@ Two-handed cribbage played asynchronously in the browser. Start a game, send
 your opponent a link, and take your turns whenever you like — the board waits
 for you.
 
+- **Text someone a link and play.** Tapping an invite seats them immediately —
+  no account, no email, no app to install.
 - Full standard rules: six-card deal, the crib, the cut, pegging to 31, and the
   show. His heels and his nob included.
 - Every point scored automatically, with a breakdown explaining where it came
   from.
 - As many simultaneous games as you have opponents.
-- Passwordless sign-in: an emailed link, no password to remember.
+- Passwordless sign-in for anyone who wants their games to follow them between
+  devices.
+
+**Going live:** see [DEPLOYING.md](DEPLOYING.md) — about fifteen minutes on
+Vercel and Neon, both free at this size.
 
 ---
 
@@ -33,8 +39,8 @@ for you.
 | Layer      | Choice                                                     |
 | ---------- | ---------------------------------------------------------- |
 | Framework  | Next.js 16 (App Router), React 19, TypeScript               |
-| Database   | Prisma 6 — SQLite locally, Postgres in production           |
-| Auth       | Magic links + a stateless, HMAC-signed session cookie       |
+| Database   | Prisma 6 on Postgres (SQLite available for offline dev)     |
+| Auth       | Guest sessions from invite links, plus optional magic links |
 | Styling    | One hand-written stylesheet; no UI framework                |
 | Typography | Fraunces (display) and Inter (UI) via `next/font`            |
 | Tests      | Vitest for the engine, a scripted HTTP smoke test for the app |
@@ -93,7 +99,7 @@ listed without deserializing anything.
 
 | Model          | Purpose                                                              |
 | -------------- | -------------------------------------------------------------------- |
-| `User`         | A player. Identified by email; no password field exists.              |
+| `User`         | A player. `email` is null for guests; no password field exists.       |
 | `LoginToken`   | A single-use magic link. Only the SHA-256 hash is stored.             |
 | `Game`         | One match: both players, the serialized state, and the projections.   |
 | `GameEvent`    | Append-only action log — one row per thing that happened.             |
@@ -158,7 +164,27 @@ Requires Node 20.11 or newer.
 git clone <your-fork> cribbage && cd cribbage
 npm install
 cp .env.example .env
+```
+
+Then pick a database. With Postgres already on your machine:
+
+```bash
+createdb cribbage_dev
+# set DATABASE_URL="postgresql://localhost:5432/cribbage_dev" in .env
+npx prisma migrate deploy
+```
+
+Or skip the server entirely and use SQLite:
+
+```bash
+npm run db:use sqlite
+# set DATABASE_URL="file:./dev.db" in .env
 npm run db:push
+```
+
+Either way:
+
+```bash
 npm run dev
 ```
 
@@ -218,7 +244,7 @@ cannot move for their opponent.
 | `PATCH`| `/api/me`               | Rename. `{ displayName }`                        |
 | `GET`  | `/api/games`            | Every game you are in                            |
 | `POST` | `/api/games`            | Open a game; returns an invite link              |
-| `POST` | `/api/games/join`       | Accept an invite. `{ code }`                     |
+| `POST` | `/api/games/join`       | Accept an invite by code. `{ code }`             |
 | `GET`  | `/api/games/:id`        | The board from your point of view                |
 | `POST` | `/api/games/:id/move`   | Apply an action                                  |
 
@@ -343,6 +369,17 @@ the right shape to back an SSE stream.
 every request. The trade is that a single session cannot be revoked early;
 rotating `AUTH_SECRET` invalidates all of them at once. For a game this is the
 right side of the trade.
+
+**Invites create accounts, not sign-in prompts.** The thing that makes this
+playable is that a texted link works on the first tap. `/join/[code]` shows who
+invited you, takes a name, and seats you as a guest — an account with no email
+whose session cookie is its only credential. Requiring an email there would
+mean setting up a mail provider before two people could play at all, and would
+put a sign-up form between a friend and a card game. The single confirmation
+tap is deliberate: it gives the invitee context, and it stops a host from
+taking the second seat in their own game by opening their own link on a phone.
+Guests can attach an email later — `User.email` is nullable and `User.isGuest`
+tracks the state.
 
 **Optimistic concurrency instead of locks.** Every move is applied inside a
 transaction guarded by `WHERE version = ?`. Two tabs racing produce one applied

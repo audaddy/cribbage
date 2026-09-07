@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { currentUser } from "@/lib/server/auth";
 import { listGamesForUser } from "@/lib/server/games";
 import { LobbyActions } from "@/components/LobbyActions";
+import { NameEditor } from "@/components/NameEditor";
 
 export const metadata = { title: "Your games — Cribbage" };
 export const dynamic = "force-dynamic";
@@ -30,11 +31,11 @@ export default async function GamesPage() {
       <div className="row-wrap">
         <div className="stack-sm" style={{ minWidth: 0 }}>
           <h1>Your games</h1>
-          <p className="small muted">Signed in as {user.displayName}</p>
+          <NameEditor name={user.displayName} isGuest={user.isGuest} />
         </div>
       </div>
 
-      <LobbyActions />
+      <LobbyActions isGuest={user.isGuest} />
 
       {games.length === 0 && (
         <div className="panel empty">

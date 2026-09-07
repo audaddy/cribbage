@@ -500,7 +500,9 @@ input {
 .table-row {
   display: flex;
   flex-wrap: wrap;
-  align-items: flex-end;
+  /* Top-aligned so the section labels line up across columns of unequal
+     height — an empty crib next to a full hand, say. */
+  align-items: flex-start;
   gap: 24px;
 }
 
@@ -1107,3 +1109,18 @@ details.disclosure[open] > summary::before { content: "▾ "; }
 }
 
 .board-shell { position: relative; }
+
+/* --- invite landing ----------------------------------------------------- */
+
+.invite-hero {
+  position: relative;
+  padding: 26px 24px;
+  border-radius: var(--radius-lg);
+  color: var(--felt-ink);
+  background:
+    radial-gradient(120% 90% at 50% -20%, rgb(255 255 255 / 0.13), transparent 60%),
+    linear-gradient(168deg, var(--felt) 0%, var(--felt-deep) 60%, var(--felt-edge) 100%);
+  box-shadow: var(--shadow-lg), inset 0 1px 0 rgb(255 255 255 / 0.12);
+}
+
+.invite-hero h1 { color: var(--felt-ink); }

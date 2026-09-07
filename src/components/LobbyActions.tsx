@@ -4,7 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 
 /** New-game and join-by-code controls, plus sign out. */
-export function LobbyActions() {
+export function LobbyActions({ isGuest = false }: { isGuest?: boolean }) {
   const router = useRouter();
   const [busy, setBusy] = useState<null | "new" | "join" | "out">(null);
   const [code, setCode] = useState("");
@@ -53,6 +53,16 @@ export function LobbyActions() {
   }
 
   async function signOut() {
+    // A guest has no email to sign back in with: the cookie is the account.
+    if (
+      isGuest &&
+      !window.confirm(
+        "You are playing as a guest, so this browser session is the only way " +
+          "back into your games. Sign out anyway?",
+      )
+    ) {
+      return;
+    }
     setBusy("out");
     await fetch("/api/auth/signout", { method: "POST" });
     router.push("/");

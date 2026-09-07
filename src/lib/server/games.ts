@@ -206,6 +206,38 @@ export async function getGameDetail(
 
 // --- writes ----------------------------------------------------------------
 
+export interface InviteSummary {
+  gameId: string;
+  hostName: string;
+  isFull: boolean;
+  status: string;
+  /** Seat the viewer already holds in this game, if any. */
+  yourSeat: Seat | null;
+}
+
+/**
+ * Public detail about an invite, safe to render to someone who is not signed
+ * in — it is what the join page shows before anyone is seated.
+ */
+export async function getInviteSummary(
+  inviteCode: string,
+  userId?: string,
+): Promise<InviteSummary | null> {
+  const game = await prisma.game.findUnique({
+    where: { inviteCode: inviteCode.toUpperCase() },
+    include: withPlayers,
+  });
+  if (!game) return null;
+
+  return {
+    gameId: game.id,
+    hostName: game.player0.displayName,
+    isFull: game.player1Id !== null,
+    status: game.status,
+    yourSeat: userId ? seatOf(game, userId) : null,
+  };
+}
+
 export async function createGameForUser(user: User): Promise<Game> {
   const state = createGame();
   for (let attempt = 0; attempt < 5; attempt++) {

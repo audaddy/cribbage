@@ -1,7 +1,13 @@
 /**
  * Passwordless authentication.
  *
- * Sign-in flow:
+ * Two ways in:
+ *   - A magic link sent to an email address (below).
+ *   - Accepting an invite link, which creates a guest account on the spot with
+ *     no email at all. A guest is identified purely by their session cookie,
+ *     which is what makes "text someone a link and start playing" work.
+ *
+ * Magic-link flow:
  *   1. The player submits an email address.
  *   2. A random token is generated; only its SHA-256 hash is stored.
  *   3. The token is emailed as a link (or echoed to the page in development).
@@ -13,7 +19,13 @@
  * session early. Rotating AUTH_SECRET invalidates every session at once.
  */
 
-import { createHash, createHmac, randomBytes, timingSafeEqual } from "node:crypto";
+import {
+  createHash,
+  createHmac,
+  randomBytes,
+  randomInt,
+  timingSafeEqual,
+} from "node:crypto";
 import { cookies } from "next/headers";
 import type { User } from "@prisma/client";
 import { prisma } from "./db";
@@ -114,8 +126,6 @@ export class UnauthorizedError extends Error {
   }
 }
 
-// --- magic links -----------------------------------------------------------
-
 export function normalizeEmail(email: string): string {
   return email.trim().toLowerCase();
 }
@@ -139,6 +149,47 @@ export function nameFromEmail(email: string): string {
     .join(" ")
     .slice(0, 40);
 }
+
+// --- guests ----------------------------------------------------------------
+
+const GUEST_ADJECTIVES = [
+  "Amber", "Brisk", "Clever", "Copper", "Dusty", "Eager", "Golden", "Hasty",
+  "Jolly", "Keen", "Lucky", "Merry", "Nimble", "Quiet", "Rapid", "Silver",
+  "Steady", "Swift", "Sunny", "Wily",
+];
+
+const GUEST_NOUNS = [
+  "Badger", "Crane", "Falcon", "Fox", "Heron", "Kestrel", "Magpie", "Marten",
+  "Otter", "Owl", "Raven", "Robin", "Sparrow", "Stoat", "Thrush", "Weasel",
+  "Wren", "Hare",
+];
+
+function pick<T>(items: readonly T[]): T {
+  return items[randomInt(items.length)]!;
+}
+
+/** A friendly stand-in name, offered as the default when joining by invite. */
+export function suggestGuestName(): string {
+  return `${pick(GUEST_ADJECTIVES)} ${pick(GUEST_NOUNS)}`;
+}
+
+/**
+ * Creates a passwordless, email-less account and signs it in.
+ *
+ * The session cookie is the only credential, so clearing site data or moving
+ * to another device loses access. That is the deliberate trade for a link a
+ * friend can tap once and be playing.
+ */
+export async function createGuestUser(displayName?: string): Promise<User> {
+  const name = (displayName ?? "").trim() || suggestGuestName();
+  const user = await prisma.user.create({
+    data: { displayName: name.slice(0, 40), isGuest: true },
+  });
+  await setSessionCookie(user.id);
+  return user;
+}
+
+// --- magic links -----------------------------------------------------------
 
 export interface MagicLink {
   url: string;
@@ -188,7 +239,11 @@ export async function consumeMagicLink(token: string): Promise<User | null> {
 
   return prisma.user.upsert({
     where: { email: record.email },
-    update: {},
-    create: { email: record.email, displayName: nameFromEmail(record.email) },
+    update: { isGuest: false },
+    create: {
+      email: record.email,
+      displayName: nameFromEmail(record.email),
+      isGuest: false,
+    },
   });
 }
