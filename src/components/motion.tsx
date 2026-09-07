@@ -33,7 +33,7 @@ const noSubscription = () => () => {};
  * mismatch. They are also pure ornament, so keeping them out of the HTML
  * payload is the right call regardless.
  */
-function useIsClient(): boolean {
+export function useIsClient(): boolean {
   return useSyncExternalStore(
     noSubscription,
     () => true,

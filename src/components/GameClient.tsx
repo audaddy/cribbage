@@ -7,7 +7,7 @@ import { type Card, type Seat, cardLabel } from "@/lib/cribbage";
 import { CribbageBoard } from "./CribbageBoard";
 import { HistoryLog } from "./HistoryLog";
 import { CardBack, PlayingCard, cardName } from "./PlayingCard";
-import { Burst, Confetti, useCountUp } from "./motion";
+import { Burst, Confetti, useCountUp, useIsClient } from "./motion";
 
 /** Poll faster while waiting on the opponent than while the board is yours. */
 const POLL_WAITING_MS = 6000;
@@ -279,10 +279,11 @@ export function GameClient({ initial }: { initial: GameDetail }) {
       )}
 
       {detail.inviteUrl && (
-        <div className="panel panel-pad stack-sm">
+        <div className="panel panel-pad stack-sm invite-panel">
           <h2>Invite your opponent</h2>
           <p className="small muted">
-            Send this link. The game starts as soon as they open it.
+            Text them this link. They tap it, pick a name, and the first hand
+            is dealt — no account, no app.
           </p>
           <InviteLink url={detail.inviteUrl} />
         </div>
@@ -704,28 +705,80 @@ function ActionBar({
   return null;
 }
 
+/**
+ * The moment the whole app hinges on: getting the link to the other person.
+ *
+ * On a phone the native share sheet is the shortest path from here to a text
+ * message, so it leads when the browser offers it. Copying is the fallback and
+ * the desktop path, and the raw link is always visible for anyone who would
+ * rather select it themselves.
+ */
 function InviteLink({ url }: { url: string }) {
+  const isClient = useIsClient();
   const [copied, setCopied] = useState(false);
+  const canShare =
+    isClient && typeof navigator !== "undefined" && typeof navigator.share === "function";
+
+  async function copy() {
+    try {
+      await navigator.clipboard.writeText(url);
+      setCopied(true);
+      window.setTimeout(() => setCopied(false), 2000);
+    } catch {
+      setCopied(false);
+    }
+  }
+
+  async function share() {
+    try {
+      await navigator.share({
+        title: "Cribbage",
+        text: "Fancy a game of cribbage? Tap this and you are in.",
+        url,
+      });
+    } catch {
+      // The share sheet was dismissed; nothing to report.
+    }
+  }
+
   return (
-    <div className="row-wrap">
-      <code className="invite-code" style={{ flex: 1 }}>
-        {url}
-      </code>
-      <button
-        type="button"
-        className="btn btn-sm"
-        onClick={async () => {
-          try {
-            await navigator.clipboard.writeText(url);
-            setCopied(true);
-            window.setTimeout(() => setCopied(false), 2000);
-          } catch {
-            setCopied(false);
-          }
-        }}
-      >
-        {copied ? "Copied" : "Copy link"}
-      </button>
+    <div className="stack-sm">
+      <div className="row-wrap">
+        {canShare && (
+          <button type="button" className="btn btn-primary" onClick={() => void share()}>
+            <ShareIcon />
+            Send the invite
+          </button>
+        )}
+        <button
+          type="button"
+          className={canShare ? "btn" : "btn btn-primary"}
+          onClick={() => void copy()}
+        >
+          {copied ? "Link copied" : "Copy link"}
+        </button>
+      </div>
+      <code className="invite-code">{url}</code>
     </div>
+  );
+}
+
+function ShareIcon() {
+  return (
+    <svg
+      width="16"
+      height="16"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <path d="M12 16V4" />
+      <path d="m7 9 5-5 5 5" />
+      <path d="M5 14v5a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-5" />
+    </svg>
   );
 }

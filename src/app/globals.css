@@ -1565,3 +1565,20 @@ details.disclosure[open] > summary::before { content: "▾ "; }
   .peg { transition: none; }
   .hand:hover .hand-card { --spread: 1; }
 }
+
+/* --- invite panel ------------------------------------------------------- */
+
+.invite-panel {
+  border-color: color-mix(in srgb, var(--brass) 45%, transparent);
+  background: linear-gradient(
+    120deg,
+    color-mix(in srgb, var(--brass) 10%, var(--surface)),
+    var(--surface) 60%
+  );
+}
+
+.invite-panel .invite-code {
+  font-size: 0.8rem;
+  padding: 9px 11px;
+  color: var(--muted);
+}
