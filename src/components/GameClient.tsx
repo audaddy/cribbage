@@ -6,7 +6,7 @@ import type { GameDetail, MoveRequest } from "@/lib/api-types";
 import { type Card, type PlayedCard as PlayedCardState, type Seat, cardLabel } from "@/lib/cribbage";
 import { CribbageBoard } from "./CribbageBoard";
 import { HistoryLog } from "./HistoryLog";
-import { CardBack, PlayingCard, cardName } from "./PlayingCard";
+import { CardBack, PlayingCard, cardName, withCardChips } from "./PlayingCard";
 import {
   Burst,
   Confetti,
@@ -578,7 +578,7 @@ export function GameClient({ initial }: { initial: GameDetail }) {
       <div className="toast-stack" role="status" aria-live="polite">
         {toasts.map((toast) => (
           <div key={toast.id} className="toast">
-            {toast.text}
+            {withCardChips(toast.text)}
           </div>
         ))}
       </div>

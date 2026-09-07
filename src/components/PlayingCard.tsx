@@ -423,3 +423,35 @@ export function MiniCard({ card }: { card: Card }) {
     </span>
   );
 }
+
+const CARD_IN_TEXT = /(10|[AJQK2-9])([\u2660\u2665\u2666\u2663])/g;
+const RED_GLYPHS = new Set(["\u2665", "\u2666"]);
+
+/**
+ * Renders a line of prose with any card it names set as a chip rather than
+ * left as bare text, so log entries and toasts read the way the scoring
+ * breakdowns already do.
+ */
+export function withCardChips(message: string): ReactNode[] {
+  const parts: ReactNode[] = [];
+  let cursor = 0;
+  let key = 0;
+
+  for (const match of message.matchAll(CARD_IN_TEXT)) {
+    const at = match.index;
+    if (at > cursor) parts.push(message.slice(cursor, at));
+    const [label, , suit] = match;
+    parts.push(
+      <span
+        key={key++}
+        className={`mini-card${RED_GLYPHS.has(suit!) ? " mini-card--red" : ""}`}
+      >
+        {label}
+      </span>,
+    );
+    cursor = at + label.length;
+  }
+
+  if (cursor < message.length) parts.push(message.slice(cursor));
+  return parts;
+}

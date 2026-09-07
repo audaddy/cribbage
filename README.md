@@ -413,17 +413,41 @@ of the last award.
 **Cards are drawn, not typeset.** `PlayingCard` renders a real pip layout — a
 seven is six pips plus one raised to the upper centre, a nine is four pairs
 around a single middle pip — with the lower half rotated as on a printed deck.
-Court cards get an engraved panel. Being SVG, the same component is crisp as a
-30px crib thumbnail and as a full-size card in hand. The gradients and the back
-pattern live in a single sprite in the root layout so a table full of cards
-does not repeat the same ids twenty times.
+Court cards carry a motif mirrored top and bottom the way a printed one does: a
+peaked crown, a pearled coronet, a plume. A whole figure turns to mush at the
+size a card is actually read here, so each rank gets one graphic shape instead.
+Being SVG, the same component is crisp as a 30px crib thumbnail and as a
+full-size card in hand. The gradients and the back pattern live in a single
+sprite in the root layout so a table full of cards does not repeat the same ids
+twenty times.
 
-**Motion is used to answer questions, not to decorate.** Cards animate in when
-dealt and drop onto the table when laid; the running count pulses when it
-moves; a score change pops the number and floats the delta off the board; new
-log lines slide in; an opponent's move raises a toast; and the tab title
-becomes "● Your turn" so a backgrounded tab tells you something happened. All
-of it collapses under `prefers-reduced-motion: reduce`.
+**Decoration is never server-rendered.** Confetti and sparks are built from
+generated numbers, and the float tails disagree between Node and the browser —
+which React reports as a hydration mismatch. Anything random is gated behind a
+client check, which also keeps seventy ornamental spans out of the HTML.
+
+**Motion is used to answer questions, not to decorate.** Cards are dealt from a
+deck that sits on the felt, and a card you play *travels* — measured in the fan
+before the move is sent, then flown into its place on the table with the Web
+Animations API off a layout effect, so the measurement and the animation happen
+in the same frame. Laying away does the same thing into the crib. The starter
+turns over with a two-sided flip. The running count rolls to its new value,
+because watching 22 climb to 27 is how you read what just happened without
+going to the log. Pegs hop out of their hole and drop into the new one while
+travelling their track. Points throw a spray of sparks in the scoring player's
+colour, more of them the bigger the score. Light sweeps the felt when the turn
+comes back to you. Winning gets confetti and the margin named.
+
+It is all transform and opacity, so it stays on the compositor, and all of it
+collapses under `prefers-reduced-motion: reduce` — including the JavaScript
+paths, which check the preference through `useSyncExternalStore` rather than
+mirroring a media query into state.
+
+**The hand is held, not listed.** Cards splay around the middle of the fan the
+way they sit in a hand, opening under the cursor and lifting a card clear of
+its neighbours when you pick it. On a phone the overlap all but disappears so
+every card stays a real tap target. The crib is a pile rather than a row, and
+the opponent's cards splay as though held.
 
 **Fonts are fetched at build time.** `next/font/google` downloads Fraunces and
 Inter during `next build` and self-hosts them, so there is no runtime request

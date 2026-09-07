@@ -1,48 +1,8 @@
 "use client";
 
-import type { ReactNode } from "react";
 import type { LogEntry } from "@/lib/api-types";
-import { MiniCard } from "./PlayingCard";
+import { MiniCard, withCardChips } from "./PlayingCard";
 
-const CARD_IN_TEXT = /(10|[AJQK2-9])([\u2660\u2665\u2666\u2663])/g;
-const RED_SUITS = new Set(["\u2665", "\u2666"]);
-
-/**
- * Renders a log line with any card it names set as a chip rather than left as
- * bare text, so the log reads the same way the scoring breakdowns do.
- */
-function withCardChips(message: string): ReactNode[] {
-  const parts: ReactNode[] = [];
-  let cursor = 0;
-  let key = 0;
-
-  for (const match of message.matchAll(CARD_IN_TEXT)) {
-    const at = match.index;
-    if (at > cursor) parts.push(message.slice(cursor, at));
-    const [label, , suit] = match;
-    parts.push(
-      <span
-        key={key++}
-        className={`mini-card${RED_SUITS.has(suit!) ? " mini-card--red" : ""}`}
-      >
-        {label}
-      </span>,
-    );
-    cursor = at + label.length;
-  }
-
-  if (cursor < message.length) parts.push(message.slice(cursor));
-  return parts;
-}
-
-/**
- * Reverse-chronological action log, grouped by hand. Entries newer than
- * `freshAfter` slide in, so an opponent's move is visible without hunting for
- * it — the caller owns that watermark, since it is the one that knows when an
- * update arrived. Show and pegging entries carry their scoring breakdown
- * behind a disclosure, so "where did those eight points come from?" is always
- * answerable without leaving the board.
- */
 export function HistoryLog({
   log,
   freshAfter = null,

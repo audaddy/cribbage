@@ -1626,3 +1626,9 @@ details.disclosure[open] > summary::before { content: "▾ "; }
 /* A pile overlaps hard; a held hand only a little. */
 .card-pile > * + * { margin-left: calc(var(--card-sm) * -0.42); }
 .card-held > * + * { margin-left: calc(var(--card-sm) * -0.26); }
+
+/* Toasts carry card chips too; they sit on a dark ground. */
+.toast .mini-card {
+  margin-inline: 1px;
+  vertical-align: baseline;
+}
