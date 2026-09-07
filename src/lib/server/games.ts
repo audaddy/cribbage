@@ -160,11 +160,15 @@ export async function getGameDetail(
   const names = namesOf(game);
   const opponentName = names[seat === 0 ? 1 : 0];
 
-  const events = await prisma.gameEvent.findMany({
-    where: { gameId },
-    orderBy: { seq: "asc" },
-    take: 400,
-  });
+  // Take the most recent slice, not the oldest: a long game would otherwise
+  // show only its opening hands and hide everything that just happened.
+  const events = (
+    await prisma.gameEvent.findMany({
+      where: { gameId },
+      orderBy: { seq: "desc" },
+      take: 400,
+    })
+  ).reverse();
 
   return {
     id: game.id,
