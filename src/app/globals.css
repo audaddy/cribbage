@@ -1582,3 +1582,21 @@ details.disclosure[open] > summary::before { content: "▾ "; }
   padding: 9px 11px;
   color: var(--muted);
 }
+
+/* --- lobby: nothing here yet -------------------------------------------- */
+
+.empty-table {
+  align-items: center;
+  text-align: center;
+  padding: 12px 26px 34px;
+  border-radius: var(--radius-lg);
+  color: var(--felt-ink);
+  background:
+    radial-gradient(120% 90% at 50% -20%, rgb(255 255 255 / 0.12), transparent 60%),
+    linear-gradient(168deg, var(--felt), var(--felt-deep) 60%, var(--felt-edge));
+  box-shadow: var(--shadow-md), inset 0 1px 0 rgb(255 255 255 / 0.12);
+}
+
+.empty-table h2 { color: var(--felt-ink); }
+.empty-table p { max-width: 40ch; }
+.empty-table strong { color: var(--brass-light); }
