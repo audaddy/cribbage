@@ -48,6 +48,15 @@ export function GameClient({ initial }: { initial: GameDetail }) {
   const toastId = useRef(0);
   /** Where a card sat in the hand at the moment it was played. */
   const [flight, setFlight] = useState<CardFlight | null>(null);
+  /**
+   * Where the two cards sat when they were laid away, plus how big the crib
+   * was at that moment. The size matters: between the click and the server's
+   * reply the crib still holds its old cards, and without the offset those
+   * would animate out of this player's hand.
+   */
+  const [cribFlight, setCribFlight] = useState<
+    { from: number; cards: CardFlight[] } | null
+  >(null);
   const handRef = useRef(detail.view.handNumber);
   const wasYourTurn = useRef(detail.view.isYourTurn);
 
@@ -148,6 +157,7 @@ export function GameClient({ initial }: { initial: GameDetail }) {
       // Cards are reshuffled, so a remembered position is meaningless — and
       // the same card code could reappear and fly from the wrong place.
       setFlight(null);
+      setCribFlight(null);
     }
   }, [view.handNumber]);
 
@@ -394,7 +404,15 @@ export function GameClient({ initial }: { initial: GameDetail }) {
                         <PlayingCard key={card} card={card} size="sm" />
                       ))
                     : Array.from({ length: view.cribSize }, (_, i) => (
-                        <CardBack key={i} size="sm" />
+                        // Only cards added after this player's own discard.
+                        <CribCard
+                          key={i}
+                          flight={
+                            cribFlight && i >= cribFlight.from
+                              ? (cribFlight.cards[i - cribFlight.from] ?? null)
+                              : null
+                          }
+                        />
                       ))}
                   {view.cribSize === 0 && !view.crib && (
                     <span className="small" style={{ opacity: 0.55 }}>
@@ -495,12 +513,16 @@ export function GameClient({ initial }: { initial: GameDetail }) {
               isCounting={isCounting}
               countLabel={view.countLabel}
               selected={selected}
-              onDiscard={() =>
-                void submit({
-                  type: "discard",
-                  cards: [selected[0]!, selected[1]!] as [string, string],
-                })
-              }
+              onDiscard={() => {
+                const cards = [selected[0]!, selected[1]!] as [Card, Card];
+                setCribFlight({
+                  from: view.cribSize,
+                  cards: cards
+                    .map((card) => captureFlight(card))
+                    .filter((f): f is CardFlight => f !== null),
+                });
+                void submit({ type: "discard", cards });
+              }}
               onPlay={() => {
                 const card = selected[0]!;
                 setFlight(captureFlight(card));
@@ -559,6 +581,16 @@ export function GameClient({ initial }: { initial: GameDetail }) {
 
 // --- sub-components --------------------------------------------------------
 
+/** A face-down card in the crib, flown from wherever it left the hand. */
+function CribCard({ flight }: { flight: CardFlight | null }) {
+  const ref = useFlyFrom<HTMLSpanElement>(flight);
+  return (
+    <span ref={ref} style={{ display: "inline-flex", lineHeight: 0 }}>
+      <CardBack size="sm" />
+    </span>
+  );
+}
+
 /** Where a card was on screen when it left the hand. */
 interface CardFlight {
   card: Card;
@@ -581,6 +613,42 @@ function captureFlight(card: Card): CardFlight | null {
 }
 
 /**
+ * Animates an element from where a card used to be to where it now is.
+ *
+ * The measurement happens in a layout effect, in the same frame as the
+ * element's first paint, so nothing flickers between the two positions. It
+ * runs once per element and not at all under prefers-reduced-motion.
+ */
+function useFlyFrom<T extends HTMLElement>(origin: CardFlight | null) {
+  const ref = useRef<T>(null);
+  const reduced = usePrefersReducedMotion();
+  const flown = useRef(false);
+
+  useLayoutEffect(() => {
+    if (!origin || flown.current || reduced) return;
+    const element = ref.current;
+    if (!element) return;
+
+    const now = element.getBoundingClientRect();
+    if (now.width === 0) return;
+    flown.current = true;
+
+    element.animate(
+      [
+        {
+          transform: `translate(${origin.left - now.left}px, ${origin.top - now.top}px) scale(${origin.width / now.width})`,
+          opacity: 0.9,
+        },
+        { transform: "none", opacity: 1 },
+      ],
+      { duration: 460, easing: "cubic-bezier(0.22, 0.75, 0.28, 1)" },
+    );
+  }, [origin, reduced]);
+
+  return ref;
+}
+
+/**
  * One card on the table. When it is the card that was just played, it starts
  * from where it sat in the hand and travels to its place in the row — the
  * gesture of laying a card down, rather than one blinking into existence.
@@ -598,29 +666,7 @@ function PlayedCard({
   ownerName: string;
   flight: CardFlight | null;
 }) {
-  const ref = useRef<HTMLDivElement>(null);
-  const reduced = usePrefersReducedMotion();
-  const flown = useRef(false);
-
-  useLayoutEffect(() => {
-    if (!flight || flown.current || reduced) return;
-    const element = ref.current;
-    if (!element) return;
-    flown.current = true;
-
-    const now = element.getBoundingClientRect();
-    const dx = flight.left - now.left;
-    const dy = flight.top - now.top;
-    const scale = now.width > 0 ? flight.width / now.width : 1;
-
-    element.animate(
-      [
-        { transform: `translate(${dx}px, ${dy}px) scale(${scale})`, opacity: 0.85 },
-        { transform: "none", opacity: 1 },
-      ],
-      { duration: 460, easing: "cubic-bezier(0.22, 0.75, 0.28, 1)" },
-    );
-  }, [flight, reduced]);
+  const ref = useFlyFrom<HTMLDivElement>(flight);
 
   return (
     <div ref={ref} className={`played${current ? " played--current" : ""}`}>

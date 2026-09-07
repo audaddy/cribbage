@@ -1600,3 +1600,9 @@ details.disclosure[open] > summary::before { content: "▾ "; }
 .empty-table h2 { color: var(--felt-ink); }
 .empty-table p { max-width: 40ch; }
 .empty-table strong { color: var(--brass-light); }
+
+/* Card names inside a log line sit on the text baseline as chips. */
+.log-message .mini-card {
+  margin-inline: 1px;
+  vertical-align: baseline;
+}
