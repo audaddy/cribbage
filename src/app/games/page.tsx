@@ -84,6 +84,25 @@ function GameSection({
                     ? `Finished · ${relative(game.updatedAt)}`
                     : `Hand ${game.handNumber} · ${relative(game.updatedAt)}`}
               </span>
+              {game.status !== "awaiting_opponent" && (
+                // A cribbage board in miniature: how far apart the pegs are.
+                <span className="mini-track" aria-hidden="true">
+                  <span
+                    className="mini-peg"
+                    style={{
+                      left: `${Math.min(game.opponentScore / game.target, 1) * 100}%`,
+                      background: game.yourSeat === 0 ? "var(--p1)" : "var(--p0)",
+                    }}
+                  />
+                  <span
+                    className="mini-peg"
+                    style={{
+                      left: `${Math.min(game.yourScore / game.target, 1) * 100}%`,
+                      background: game.yourSeat === 0 ? "var(--p0)" : "var(--p1)",
+                    }}
+                  />
+                </span>
+              )}
             </div>
 
             <span className="scoreline">

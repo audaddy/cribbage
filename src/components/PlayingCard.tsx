@@ -257,6 +257,11 @@ export function CardDefs() {
           <stop offset="0%" stopColor="#fffdf6" />
           <stop offset="100%" stopColor="#f1e9d7" />
         </linearGradient>
+        <linearGradient id="cardSheen" x1="0" y1="0" x2="0.7" y2="1">
+          <stop offset="0%" stopColor="#ffffff" stopOpacity="0.55" />
+          <stop offset="55%" stopColor="#ffffff" stopOpacity="0.08" />
+          <stop offset="100%" stopColor="#ffffff" stopOpacity="0" />
+        </linearGradient>
         <linearGradient id="backField" x1="0" y1="0" x2="0.5" y2="1">
           <stop offset="0%" stopColor="#2f5f92" />
           <stop offset="100%" stopColor="#1b3a5e" />
@@ -334,6 +339,7 @@ export function PlayingCard({
       aria-label={cardName(card)}
     >
       <rect x="0" y="0" width="100" height="140" rx="9" fill="url(#cardFace)" />
+      <rect x="0" y="0" width="100" height="72" rx="9" fill="url(#cardSheen)" />
       <rect
         x="0.7"
         y="0.7"

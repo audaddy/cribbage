@@ -135,6 +135,14 @@ export function CribbageBoard({
           role="img"
           aria-label={`Board: ${names[0]} on ${scores[0]}, ${names[1]} on ${scores[1]}, playing to ${target}.`}
         >
+          <defs>
+            <radialGradient id="screwHead" cx="0.34" cy="0.3" r="0.85">
+              <stop offset="0%" stopColor="#f0d69b" />
+              <stop offset="55%" stopColor="#c08b3e" />
+              <stop offset="100%" stopColor="#6d4520" />
+            </radialGradient>
+          </defs>
+
           {/* Recessed playing surface. */}
           <rect
             x="5"
@@ -157,15 +165,65 @@ export function CribbageBoard({
             strokeWidth="1"
           />
 
-          {/* Centre inlay between the two players' blocks. */}
-          <line
-            x1="20"
-            y1={(LANES[0]!.back + LANES[1]!.out) / 2}
-            x2={VB_W - 20}
-            y2={(LANES[0]!.back + LANES[1]!.out) / 2}
-            stroke="rgb(255 255 255 / 0.1)"
-            strokeWidth="1"
-          />
+          {/* Centre inlay, broken around an engraved wordmark. */}
+          {(() => {
+            const y = (LANES[0]!.back + LANES[1]!.out) / 2;
+            const gap = 54;
+            const mid = VB_W / 2;
+            return (
+              <g>
+                <line
+                  x1="22"
+                  y1={y}
+                  x2={mid - gap}
+                  y2={y}
+                  stroke="rgb(255 255 255 / 0.1)"
+                  strokeWidth="1"
+                />
+                <line
+                  x1={mid + gap}
+                  y1={y}
+                  x2={VB_W - 22}
+                  y2={y}
+                  stroke="rgb(255 255 255 / 0.1)"
+                  strokeWidth="1"
+                />
+                <text
+                  x={mid}
+                  y={y + 2.6}
+                  textAnchor="middle"
+                  fontSize="7.5"
+                  letterSpacing="2.6"
+                  fill="rgb(255 255 255 / 0.22)"
+                  fontFamily="var(--font-ui)"
+                >
+                  CRIBBAGE
+                </text>
+              </g>
+            );
+          })()}
+
+          {/* Brass screws holding the board down. */}
+          {[
+            [16, 15],
+            [VB_W - 16, 15],
+            [16, VB_H - 15],
+            [VB_W - 16, VB_H - 15],
+          ].map(([x, y]) => (
+            <g key={`${x}-${y}`}>
+              <circle cx={x} cy={y} r="4.2" fill="rgb(0 0 0 / 0.3)" />
+              <circle cx={x} cy={y} r="3.6" fill="url(#screwHead)" />
+              <line
+                x1={x! - 2.1}
+                y1={y! - 1}
+                x2={x! + 2.1}
+                y2={y! + 1}
+                stroke="rgb(0 0 0 / 0.5)"
+                strokeWidth="0.9"
+                strokeLinecap="round"
+              />
+            </g>
+          ))}
 
           {seats.map((seat) => {
             const lane = LANES[seat]!;

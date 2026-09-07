@@ -61,6 +61,10 @@
   --shadow-card: 0 1px 1px rgb(30 20 10 / 0.16), 0 4px 10px rgb(30 20 10 / 0.16);
   --shadow-card-lift: 0 6px 12px rgb(30 20 10 / 0.2), 0 18px 34px rgb(30 20 10 / 0.24);
 
+  --card-md: 68px;
+  --card-sm: 46px;
+  --card-xs: 38px;
+
   --font-ui: var(--font-sans), system-ui, -apple-system, "Segoe UI", sans-serif;
   --font-head: var(--font-display), Georgia, "Times New Roman", serif;
 
@@ -547,14 +551,14 @@ input {
   flex-wrap: wrap;
   gap: 10px;
   align-items: flex-end;
-  min-height: calc(var(--card-w, 68px) * 1.4);
+  min-height: calc(var(--card-md) * 1.4);
 }
 
 /* Strips of small cards size to their contents; only the hand reserves room. */
 .card-strip--tight { gap: 6px; min-height: 0; }
 
 .pcard {
-  --card-w: 68px;
+  --card-w: var(--card-md);
   width: var(--card-w);
   aspect-ratio: 5 / 7;
   flex: none;
@@ -571,8 +575,8 @@ input {
 
 .pcard svg { display: block; width: 100%; height: 100%; }
 
-.pcard--sm { --card-w: 46px; }
-.pcard--xs { --card-w: 38px; }
+.pcard--sm { --card-w: var(--card-sm); }
+.pcard--xs { --card-w: var(--card-xs); }
 
 .pcard--starter {
   box-shadow: var(--shadow-card-lift), 0 0 0 2px var(--brass-light);
@@ -592,7 +596,7 @@ input {
   border: none;
   background: none;
   cursor: pointer;
-  border-radius: calc(var(--card-w, 68px) * 0.09);
+  border-radius: calc(var(--card-md) * 0.09);
   line-height: 0;
   transition: transform 0.22s var(--ease);
 }
@@ -615,10 +619,10 @@ input {
 }
 
 .pcard-slot {
-  width: var(--card-w, 68px);
+  width: var(--card-md);
   aspect-ratio: 5 / 7;
   flex: none;
-  border-radius: calc(var(--card-w, 68px) * 0.09);
+  border-radius: calc(var(--card-md) * 0.09);
   border: 1.5px dashed rgb(242 233 215 / 0.26);
   background: rgb(0 0 0 / 0.1);
 }
@@ -1069,11 +1073,12 @@ details.disclosure[open] > summary::before { content: "▾ "; }
 
 /* A phone should still show a six-card hand as one row. */
 @media (max-width: 460px) {
+  :root {
+    --card-md: 46px;
+    --card-sm: 34px;
+    --card-xs: 30px;
+  }
   .shell { padding: 16px 12px 64px; }
-  .pcard { --card-w: 46px; }
-  .pcard--sm { --card-w: 34px; }
-  .pcard--xs { --card-w: 30px; }
-  .pcard-slot { --card-w: 46px; }
   .card-strip { gap: 5px; }
   .card-strip--tight { gap: 4px; }
   .played-total { font-size: 0.68rem; padding: 1px 5px; }
@@ -1140,11 +1145,12 @@ details.disclosure[open] > summary::before { content: "▾ "; }
   justify-content: center;
   align-items: flex-end;
   padding: 26px 0 6px;
-  min-height: calc(var(--card-w, 68px) * 1.4 + 32px);
+  min-height: calc(var(--card-md) * 1.4 + 32px);
   perspective: 1400px;
 }
 
 .hand-card {
+  --card-w: var(--card-md);
   --lift: 0px;
   --spread: 1;
   padding: 0;
@@ -1221,7 +1227,7 @@ details.disclosure[open] > summary::before { content: "▾ "; }
 
 .deck {
   position: relative;
-  width: calc(var(--card-w, 68px) * 0.82);
+  width: calc(var(--card-md) * 0.82);
   aspect-ratio: 5 / 7;
   flex: none;
 }
@@ -1245,7 +1251,7 @@ details.disclosure[open] > summary::before { content: "▾ "; }
 
 .flip {
   perspective: 900px;
-  width: var(--card-w, 68px);
+  width: var(--card-md);
   aspect-ratio: 5 / 7;
 }
 
@@ -1440,4 +1446,39 @@ details.disclosure[open] > summary::before { content: "▾ "; }
 
 @keyframes spin {
   to { transform: rotate(360deg); }
+}
+
+/* --- lobby: the board in miniature -------------------------------------- */
+
+.mini-track {
+  position: relative;
+  display: block;
+  width: 100%;
+  max-width: 210px;
+  height: 4px;
+  margin-top: 7px;
+  border-radius: 2px;
+  background: var(--surface-3);
+  box-shadow: inset 0 1px 1px rgb(0 0 0 / 0.08);
+}
+
+.mini-peg {
+  position: absolute;
+  top: -3px;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  transform: translateX(-50%);
+  box-shadow:
+    0 0 0 2px var(--surface),
+    inset 0 -1px 1px rgb(0 0 0 / 0.3);
+}
+
+.game-card--turn .tag--turn {
+  animation: tag-glow 2.8s ease-in-out infinite;
+}
+
+@keyframes tag-glow {
+  0%, 100% { box-shadow: 0 0 0 0 transparent; }
+  50% { box-shadow: 0 0 0 5px color-mix(in srgb, var(--warn) 13%, transparent); }
 }
