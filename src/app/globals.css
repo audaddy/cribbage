@@ -1606,3 +1606,23 @@ details.disclosure[open] > summary::before { content: "▾ "; }
   margin-inline: 1px;
   vertical-align: baseline;
 }
+
+/* --- cards on the felt: piled and held ---------------------------------- */
+
+.card-pile,
+.card-held {
+  padding-top: 6px;
+}
+
+.card-pile > *,
+.card-held > * {
+  display: inline-flex;
+  line-height: 0;
+  transform: rotate(var(--tilt, 0deg));
+  transform-origin: 50% 120%;
+  transition: transform 0.3s var(--ease);
+}
+
+/* A pile overlaps hard; a held hand only a little. */
+.card-pile > * + * { margin-left: calc(var(--card-sm) * -0.42); }
+.card-held > * + * { margin-left: calc(var(--card-sm) * -0.26); }

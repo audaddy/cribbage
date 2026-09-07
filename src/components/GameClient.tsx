@@ -398,15 +398,18 @@ export function GameClient({ initial }: { initial: GameDetail }) {
                 <span className="table-label">
                   {view.youAreDealer ? "Your crib" : `${names[view.dealer]}'s crib`}
                 </span>
-                <div className="card-strip card-strip--tight">
+                <div className="card-strip card-strip--tight card-pile">
                   {view.crib
-                    ? view.crib.map((card) => (
-                        <PlayingCard key={card} card={card} size="sm" />
+                    ? view.crib.map((card, i) => (
+                        <span key={card} style={pileTilt(i)}>
+                          <PlayingCard card={card} size="sm" />
+                        </span>
                       ))
                     : Array.from({ length: view.cribSize }, (_, i) => (
                         // Only cards added after this player's own discard.
                         <CribCard
                           key={i}
+                          tilt={pileTilt(i)}
                           flight={
                             cribFlight && i >= cribFlight.from
                               ? (cribFlight.cards[i - cribFlight.from] ?? null)
@@ -424,13 +427,17 @@ export function GameClient({ initial }: { initial: GameDetail }) {
 
               <div className="stack-sm">
                 <span className="table-label">{names[view.you === 0 ? 1 : 0]}</span>
-                <div className="card-strip card-strip--tight">
+                <div className="card-strip card-strip--tight card-held">
                   {view.opponentHand
-                    ? view.opponentHand.map((card) => (
-                        <PlayingCard key={card} card={card} size="sm" />
+                    ? view.opponentHand.map((card, i) => (
+                        <span key={card} style={heldTilt(i, view.opponentHand!.length)}>
+                          <PlayingCard card={card} size="sm" />
+                        </span>
                       ))
                     : Array.from({ length: view.opponentCardCount }, (_, i) => (
-                        <CardBack key={i} size="sm" />
+                        <span key={i} style={heldTilt(i, view.opponentCardCount)}>
+                          <CardBack size="sm" />
+                        </span>
                       ))}
                   {view.opponentCardCount === 0 && !view.opponentHand && (
                     <span className="small" style={{ opacity: 0.55 }}>
@@ -582,13 +589,34 @@ export function GameClient({ initial }: { initial: GameDetail }) {
 // --- sub-components --------------------------------------------------------
 
 /** A face-down card in the crib, flown from wherever it left the hand. */
-function CribCard({ flight }: { flight: CardFlight | null }) {
+function CribCard({
+  flight,
+  tilt,
+}: {
+  flight: CardFlight | null;
+  tilt: React.CSSProperties;
+}) {
   const ref = useFlyFrom<HTMLSpanElement>(flight);
   return (
-    <span ref={ref} style={{ display: "inline-flex", lineHeight: 0 }}>
+    <span ref={ref} style={tilt}>
       <CardBack size="sm" />
     </span>
   );
+}
+
+/**
+ * Cards laid away land in a pile, not a row. The tilt is derived from the
+ * index rather than random, so it does not reshuffle on every render.
+ */
+function pileTilt(index: number): React.CSSProperties {
+  const angles = [-4, 2.5, -1.5, 5, -3];
+  return { "--tilt": `${angles[index % angles.length]}deg` } as React.CSSProperties;
+}
+
+/** A held hand splays gently around its middle. */
+function heldTilt(index: number, count: number): React.CSSProperties {
+  const middle = (count - 1) / 2;
+  return { "--tilt": `${(index - middle) * 4}deg` } as React.CSSProperties;
 }
 
 /** Where a card was on screen when it left the hand. */
