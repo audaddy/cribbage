@@ -1,33 +1,82 @@
 import type { Seat } from "@/lib/cribbage";
 
 /**
- * A cribbage board rendered as two 121-hole tracks.
+ * A cribbage board drawn as two serpentine tracks.
  *
- * Each player gets a front peg (current score) and a back peg (score before
- * the last award) — the same information a real board carries, which is what
- * makes "how much did they just take?" readable at a glance. The SVG scales
- * with its container, so the holes become texture on a phone while the pegs
- * stay legible.
+ * Each player's lane runs out along the top row (holes 1–60), turns at the far
+ * end, comes back along the bottom (61–120), and finishes in the game hole.
+ * The same geometry produces both the SVG path and every hole position, so the
+ * pegs sit exactly in their holes.
+ *
+ * Pegs move with `offset-path`, which walks them along the real track — around
+ * the turn included — rather than sliding across the board in a straight line.
+ * Each player carries a front peg at the current score and a back peg at the
+ * previous one, the way a real board records the size of the last award.
  */
 
-const HOLES = 121;
-const HOLE_GAP = 4.4;
-const GROUP_GAP = 1.6;
-const START_X = 14;
-const LEFT = 26;
-const LANE_Y: [number, number] = [30, 66];
-const SKUNK_HOLE = 91;
+const HOLES_PER_ROW = 60;
+const SPACING = 8.4;
+const GROUP_GAP = 3.2; // extra breathing room after every fifth hole
+const X_START = 46;
 
-function holeX(index: number): number {
-  return LEFT + index * HOLE_GAP + Math.floor(index / 5) * GROUP_GAP;
+/** Distance from the first hole of a row to hole `index` (0-based). */
+function rowOffset(index: number): number {
+  return index * SPACING + Math.floor(index / 5) * GROUP_GAP;
 }
 
-const WIDTH = holeX(HOLES - 1) + 22;
+const SPAN = rowOffset(HOLES_PER_ROW - 1);
+const X_END = X_START + SPAN;
+const TURN_R = 16;
+const PEG_START_X = X_START - 20;
+const GAME_X = PEG_START_X;
 
-/** Peg position for a score: hole 1 is the first peg-in, 0 sits on the start post. */
-function pegX(score: number): number {
-  if (score <= 0) return START_X;
-  return holeX(Math.min(score, HOLES) - 1);
+const LANES: { out: number; back: number }[] = [
+  { out: 40, back: 40 + TURN_R * 2 },
+  { out: 118, back: 118 + TURN_R * 2 },
+];
+
+const VB_W = Math.round(X_END + TURN_R + 20);
+const VB_H = 184;
+const SKUNK = 91;
+const GAME_HOLE = 121;
+
+function trackPath(lane: { out: number; back: number }): string {
+  return [
+    `M ${PEG_START_X} ${lane.out}`,
+    `L ${X_END} ${lane.out}`,
+    `A ${TURN_R} ${TURN_R} 0 0 1 ${X_END} ${lane.back}`,
+    `L ${X_START} ${lane.back}`,
+    `L ${GAME_X} ${lane.back}`,
+  ].join(" ");
+}
+
+const OUT_LEN = X_END - PEG_START_X;
+const TURN_LEN = Math.PI * TURN_R;
+const BACK_LEN = X_END - X_START;
+const TAIL_LEN = X_START - GAME_X;
+
+/** How far along the track a peg sits for a given score, in user units. */
+function distanceFor(score: number): number {
+  if (score <= 0) return 0;
+  if (score <= HOLES_PER_ROW) {
+    return X_START - PEG_START_X + rowOffset(score - 1);
+  }
+  if (score < GAME_HOLE) {
+    return OUT_LEN + TURN_LEN + rowOffset(score - HOLES_PER_ROW - 1);
+  }
+  return OUT_LEN + TURN_LEN + BACK_LEN + TAIL_LEN;
+}
+
+/** Where hole `score` is drawn. */
+function holePoint(
+  score: number,
+  lane: { out: number; back: number },
+): [number, number] {
+  if (score <= HOLES_PER_ROW) return [X_START + rowOffset(score - 1), lane.out];
+  if (score < GAME_HOLE) {
+    return [X_END - rowOffset(score - HOLES_PER_ROW - 1), lane.back];
+  }
+  return [GAME_X, lane.back];
 }
 
 interface CribbageBoardProps {
@@ -37,6 +86,8 @@ interface CribbageBoardProps {
   you: Seat;
   target: number;
   winnerSeat: Seat | null;
+  /** Seat whose score just changed, for the pop animation. */
+  bumped?: Seat | null;
 }
 
 export function CribbageBoard({
@@ -46,21 +97,27 @@ export function CribbageBoard({
   you,
   target,
   winnerSeat,
+  bumped,
 }: CribbageBoardProps) {
   const seats: Seat[] = [0, 1];
-  const colorOf = (seat: Seat) => (seat === 0 ? "var(--p0)" : "var(--p1)");
+  const pegColor = (seat: Seat) => (seat === 0 ? "var(--p0)" : "var(--p1)");
+  const pegHighlight = (seat: Seat) =>
+    seat === 0 ? "var(--p0-light)" : "var(--p1-light)";
 
   return (
     <div className="stack-sm">
-      <div className="row" style={{ gap: 18, flexWrap: "wrap" }}>
+      <div className="scoreboard">
         {seats.map((seat) => (
-          <div key={seat} className="score-row" style={{ minWidth: 0 }}>
-            <span className="peg-dot" style={{ background: colorOf(seat) }} />
+          <div key={seat} className="score-row">
+            <span className="peg-dot" style={{ background: pegColor(seat) }} />
             <span className="score-name">
               {names[seat]}
               {seat === you ? " (you)" : ""}
             </span>
-            <span className="score-value num" style={{ color: colorOf(seat) }}>
+            <span
+              className={`score-value${bumped === seat ? " score-value--bump" : ""}`}
+              style={{ color: pegColor(seat) }}
+            >
               {scores[seat]}
             </span>
             <span className="tiny muted">
@@ -72,106 +129,222 @@ export function CribbageBoard({
         ))}
       </div>
 
-      <div className="board">
+      <div className="board-frame">
         <svg
-          viewBox={`0 0 ${WIDTH} 96`}
+          viewBox={`0 0 ${VB_W} ${VB_H}`}
           role="img"
-          aria-label={`Board: ${names[0]} ${scores[0]}, ${names[1]} ${scores[1]}, playing to ${target}.`}
+          aria-label={`Board: ${names[0]} on ${scores[0]}, ${names[1]} on ${scores[1]}, playing to ${target}.`}
         >
-          <defs>
-            <linearGradient id="groove" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%" stopColor="rgb(0 0 0 / 0.28)" />
-              <stop offset="100%" stopColor="rgb(255 255 255 / 0.06)" />
-            </linearGradient>
-          </defs>
+          {/* Recessed playing surface. */}
+          <rect
+            x="5"
+            y="5"
+            width={VB_W - 10}
+            height={VB_H - 10}
+            rx="11"
+            fill="rgb(0 0 0 / 0.16)"
+            stroke="rgb(0 0 0 / 0.3)"
+            strokeWidth="1"
+          />
+          <rect
+            x="8"
+            y="8"
+            width={VB_W - 16}
+            height={VB_H - 16}
+            rx="9"
+            fill="none"
+            stroke="rgb(255 255 255 / 0.13)"
+            strokeWidth="1"
+          />
+
+          {/* Centre inlay between the two players' blocks. */}
+          <line
+            x1="20"
+            y1={(LANES[0]!.back + LANES[1]!.out) / 2}
+            x2={VB_W - 20}
+            y2={(LANES[0]!.back + LANES[1]!.out) / 2}
+            stroke="rgb(255 255 255 / 0.1)"
+            strokeWidth="1"
+          />
 
           {seats.map((seat) => {
-            const y = LANE_Y[seat];
+            const lane = LANES[seat]!;
+            const path = trackPath(lane);
+            const [skunkX, skunkY] = holePoint(SKUNK, lane);
+            const [gameHoleX, gameHoleY] = holePoint(GAME_HOLE, lane);
+
             return (
               <g key={seat}>
-                {/* Lane groove */}
-                <rect
-                  x={START_X - 8}
-                  y={y - 11}
-                  width={WIDTH - START_X - 6}
-                  height={22}
-                  rx={11}
-                  fill="url(#groove)"
+                {/* The carved groove the pegs travel down. */}
+                <path
+                  d={path}
+                  fill="none"
+                  stroke="rgb(0 0 0 / 0.3)"
+                  strokeWidth="15"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
                 />
-                {/* Start post */}
-                <circle cx={START_X} cy={y} r={2.6} fill="rgb(0 0 0 / 0.45)" />
+                <path
+                  d={path}
+                  fill="none"
+                  stroke="rgb(255 255 255 / 0.08)"
+                  strokeWidth="12.5"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
 
-                {/* The 121 holes, grouped in fives. */}
-                {Array.from({ length: HOLES }, (_, i) => (
-                  <circle
-                    key={i}
-                    cx={holeX(i)}
-                    cy={y}
-                    r={1.35}
-                    fill={
-                      (i + 1) % 5 === 0 ? "rgb(0 0 0 / 0.55)" : "rgb(0 0 0 / 0.32)"
-                    }
-                  />
-                ))}
+                {/* Lane tint, so the two players' tracks read apart. */}
+                <path
+                  d={path}
+                  fill="none"
+                  stroke={pegColor(seat)}
+                  strokeOpacity="0.16"
+                  strokeWidth="12.5"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
 
-                {/* Back peg: where the score stood before the last award. */}
+                {/* The 120 holes plus the game hole. */}
+                {Array.from({ length: GAME_HOLE }, (_, i) => {
+                  const score = i + 1;
+                  const [x, y] = holePoint(score, lane);
+                  const isFifth = score % 5 === 0;
+                  const isGame = score === GAME_HOLE;
+                  return (
+                    <g key={score}>
+                      <circle
+                        cx={x}
+                        cy={y}
+                        r={isGame ? 2.8 : isFifth ? 2.1 : 1.7}
+                        fill="rgb(0 0 0 / 0.52)"
+                      />
+                      <circle
+                        cx={x}
+                        cy={y + 0.7}
+                        r={isGame ? 2.4 : isFifth ? 1.7 : 1.35}
+                        fill="rgb(255 255 255 / 0.07)"
+                      />
+                    </g>
+                  );
+                })}
+
+                {/* Start post. */}
+                <circle
+                  cx={PEG_START_X}
+                  cy={lane.out}
+                  r="2.8"
+                  fill="rgb(0 0 0 / 0.55)"
+                />
+                <circle
+                  cx={PEG_START_X}
+                  cy={lane.out}
+                  r="5"
+                  fill="none"
+                  stroke="rgb(255 255 255 / 0.18)"
+                  strokeWidth="0.9"
+                />
+
+                {/* Game hole, ringed in brass. */}
+                <circle
+                  cx={gameHoleX}
+                  cy={gameHoleY}
+                  r="5.2"
+                  fill="none"
+                  stroke="var(--brass)"
+                  strokeOpacity="0.75"
+                  strokeWidth="1.2"
+                />
+
+                {/* Skunk line at 91. */}
+                <line
+                  x1={skunkX}
+                  y1={skunkY - 9}
+                  x2={skunkX}
+                  y2={skunkY + 9}
+                  stroke="rgb(255 255 255 / 0.34)"
+                  strokeWidth="1"
+                  strokeDasharray="2.5 2.5"
+                />
+
+                {/* Back peg: where this player stood before the last award. */}
                 {prevScores[seat] !== scores[seat] && (
-                  <circle
-                    cx={pegX(prevScores[seat])}
-                    cy={y}
-                    r={2.9}
-                    fill="none"
-                    stroke={colorOf(seat)}
-                    strokeWidth={1.6}
-                    opacity={0.75}
-                  />
+                  <g
+                    className="peg peg--back"
+                    style={{
+                      offsetPath: `path("${path}")`,
+                      offsetDistance: `${distanceFor(prevScores[seat])}px`,
+                    }}
+                  >
+                    <circle
+                      r="3.4"
+                      fill="none"
+                      stroke={pegColor(seat)}
+                      strokeOpacity="0.8"
+                      strokeWidth="1.6"
+                    />
+                  </g>
                 )}
 
                 {/* Front peg: the current score. */}
-                <g>
+                <g
+                  className="peg peg--front"
+                  style={{
+                    offsetPath: `path("${path}")`,
+                    offsetDistance: `${distanceFor(scores[seat])}px`,
+                  }}
+                >
+                  <ellipse cx="0.8" cy="2.4" rx="5" ry="2.2" fill="rgb(0 0 0 / 0.35)" />
                   <circle
-                    cx={pegX(scores[seat])}
-                    cy={y}
-                    r={4.4}
-                    fill={colorOf(seat)}
-                    stroke="rgb(0 0 0 / 0.35)"
-                    strokeWidth={0.8}
+                    r="5"
+                    fill={pegColor(seat)}
+                    stroke="rgb(0 0 0 / 0.4)"
+                    strokeWidth="0.9"
                   />
-                  <circle
-                    cx={pegX(scores[seat]) - 1.1}
-                    cy={y - 1.1}
-                    r={1.3}
-                    fill="rgb(255 255 255 / 0.5)"
-                  />
+                  <circle cx="-1.4" cy="-1.6" r="1.8" fill={pegHighlight(seat)} />
+                  <circle cx="-1.9" cy="-2.1" r="0.8" fill="rgb(255 255 255 / 0.75)" />
                 </g>
               </g>
             );
           })}
 
-          {/* Skunk line at 91 — under it at game end and you are skunked. */}
-          <line
-            x1={holeX(SKUNK_HOLE - 1)}
-            y1={12}
-            x2={holeX(SKUNK_HOLE - 1)}
-            y2={84}
-            stroke="rgb(0 0 0 / 0.3)"
-            strokeWidth={1}
-            strokeDasharray="3 3"
-          />
-
-          {[1, 30, 60, 91, 121].map((mark) => (
-            <text
-              key={mark}
-              x={holeX(mark - 1)}
-              y={92}
-              textAnchor="middle"
-              fontSize="7"
-              fill="rgb(255 255 255 / 0.55)"
-              fontFamily="ui-sans-serif, system-ui, sans-serif"
-            >
-              {mark === 91 ? "91 skunk" : mark}
-            </text>
-          ))}
+          {/* Street markers. */}
+          {[10, 20, 30, 40, 50, 60].map((mark) => {
+            const [x] = holePoint(mark, LANES[0]!);
+            return (
+              <text
+                key={mark}
+                x={x}
+                y={LANES[0]!.out - 12}
+                textAnchor="middle"
+                fontSize="7.5"
+                fill="rgb(255 255 255 / 0.42)"
+                fontFamily="var(--font-ui)"
+              >
+                {mark}
+              </text>
+            );
+          })}
+          <text
+            x={GAME_X}
+            y={LANES[1]!.back + 17}
+            textAnchor="middle"
+            fontSize="8"
+            fontWeight="700"
+            fill="var(--brass-light)"
+            fontFamily="var(--font-ui)"
+          >
+            121
+          </text>
+          <text
+            x={holePoint(SKUNK, LANES[1]!)[0]}
+            y={LANES[1]!.back + 17}
+            textAnchor="middle"
+            fontSize="7.5"
+            fill="rgb(255 255 255 / 0.42)"
+            fontFamily="var(--font-ui)"
+          >
+            skunk
+          </text>
         </svg>
       </div>
     </div>

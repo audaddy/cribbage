@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import type { GameDetail, MoveRequest } from "@/lib/api-types";
-import { type Card, cardLabel } from "@/lib/cribbage";
+import { type Card, type Seat, cardLabel } from "@/lib/cribbage";
 import { CribbageBoard } from "./CribbageBoard";
 import { HistoryLog } from "./HistoryLog";
 import { CardBack, PlayingCard, cardName } from "./PlayingCard";
@@ -11,40 +11,84 @@ import { CardBack, PlayingCard, cardName } from "./PlayingCard";
 /** Poll faster while waiting on the opponent than while the board is yours. */
 const POLL_WAITING_MS = 6000;
 const POLL_ACTIVE_MS = 20000;
+const TOAST_MS = 4500;
+const BUMP_MS = 1600;
+
+interface Toast {
+  id: number;
+  text: string;
+}
 
 export function GameClient({ initial }: { initial: GameDetail }) {
   const [detail, setDetail] = useState(initial);
   const [selected, setSelected] = useState<Card[]>([]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [toasts, setToasts] = useState<Toast[]>([]);
+  const [bump, setBump] = useState<{ seat: Seat; delta: number; key: number } | null>(
+    null,
+  );
+  const [countBump, setCountBump] = useState(0);
+  /** Log seq at the moment of the last update; anything above it is new. */
+  const [freshAfter, setFreshAfter] = useState<number | null>(null);
+
   const inFlight = useRef(false);
+  const detailRef = useRef(detail);
+  const scoresRef = useRef(detail.view.scores);
+  const totalRef = useRef(detail.view.play.total);
+  const toastId = useRef(0);
 
   const { view } = detail;
   const names: [string, string] =
     view.you === 0
       ? [detail.you.name, detail.opponent?.name ?? "Opponent"]
       : [detail.opponent?.name ?? "Opponent", detail.you.name];
+  const opponentName = detail.opponent?.name ?? "an opponent yet to join";
+
+  useEffect(() => {
+    detailRef.current = detail;
+  }, [detail]);
+
+  const pushToast = useCallback((text: string) => {
+    const id = ++toastId.current;
+    setToasts((current) => [...current.slice(-2), { id, text }]);
+    window.setTimeout(
+      () => setToasts((current) => current.filter((t) => t.id !== id)),
+      TOAST_MS,
+    );
+  }, []);
+
+  // --- polling ------------------------------------------------------------
 
   const refresh = useCallback(async () => {
     if (inFlight.current) return;
     inFlight.current = true;
     try {
-      const response = await fetch(`/api/games/${initial.id}`, {
-        cache: "no-store",
-      });
-      if (response.ok) {
-        const next = (await response.json()) as GameDetail;
-        // Never clobber a newer local state with a stale poll response.
-        setDetail((current) => (next.version >= current.version ? next : current));
-      }
+      const response = await fetch(`/api/games/${initial.id}`, { cache: "no-store" });
+      if (!response.ok) return;
+      const next = (await response.json()) as GameDetail;
+      const current = detailRef.current;
+      // Never clobber a newer local state with a stale poll response.
+      if (next.version <= current.version) return;
+
+      // Surface what the opponent did while we were watching.
+      const lastSeen = current.log.at(-1)?.seq ?? -1;
+      const theirs = next.log.filter(
+        (entry) =>
+          entry.seq > lastSeen && entry.seat !== null && entry.seat !== next.view.you,
+      );
+      const notable = theirs.filter((entry) => entry.type !== "deal").at(-1);
+      if (notable) pushToast(notable.message);
+
+      setFreshAfter(lastSeen);
+      setDetail(next);
     } catch {
       /* offline or transient — the next tick will retry */
     } finally {
       inFlight.current = false;
     }
-  }, [initial.id]);
+  }, [initial.id, pushToast]);
 
-  // Poll for the opponent's moves, and refresh whenever the tab regains focus.
   useEffect(() => {
     if (view.phase === "complete") return;
     const interval = window.setInterval(
@@ -63,6 +107,46 @@ export function GameClient({ initial }: { initial: GameDetail }) {
     };
   }, [refresh, view.isYourTurn, view.phase]);
 
+  // --- reactions to state changes ----------------------------------------
+
+  // A score change pops the number and floats the delta off the board.
+  useEffect(() => {
+    const before = scoresRef.current;
+    const after = view.scores;
+    if (before[0] !== after[0] || before[1] !== after[1]) {
+      const seat: Seat = after[0] > before[0] ? 0 : 1;
+      const delta = after[seat] - before[seat];
+      scoresRef.current = after;
+      if (delta > 0) {
+        const key = Date.now();
+        setBump({ seat, delta, key });
+        const timer = window.setTimeout(() => setBump(null), BUMP_MS);
+        return () => window.clearTimeout(timer);
+      }
+    }
+    scoresRef.current = after;
+  }, [view.scores]);
+
+  // The running count pulses whenever it moves.
+  useEffect(() => {
+    if (totalRef.current !== view.play.total) {
+      totalRef.current = view.play.total;
+      setCountBump((n) => n + 1);
+    }
+  }, [view.play.total]);
+
+  // Tell a backgrounded tab that it is your move.
+  useEffect(() => {
+    const base = "Cribbage";
+    document.title =
+      view.isYourTurn && view.phase !== "complete" ? `● Your turn — ${base}` : base;
+    return () => {
+      document.title = base;
+    };
+  }, [view.isYourTurn, view.phase]);
+
+  // --- moves --------------------------------------------------------------
+
   const submit = useCallback(
     async (move: MoveRequest) => {
       setBusy(true);
@@ -80,6 +164,7 @@ export function GameClient({ initial }: { initial: GameDetail }) {
           if (response.status === 409) void refresh();
           return;
         }
+        setFreshAfter(detailRef.current.log.at(-1)?.seq ?? -1);
         setDetail(body as GameDetail);
         setSelected([]);
       } catch {
@@ -102,7 +187,7 @@ export function GameClient({ initial }: { initial: GameDetail }) {
     });
   };
 
-  // --- derived UI state ---------------------------------------------------
+  // --- derived ------------------------------------------------------------
 
   const isDiscard = view.phase === "discard" && view.isYourTurn;
   const isPegging = view.phase === "pegging" && view.isYourTurn;
@@ -111,6 +196,8 @@ export function GameClient({ initial }: { initial: GameDetail }) {
 
   const handCards = view.phase === "pegging" ? view.unplayed : view.hand;
   const playable = new Set(view.legalPlays);
+  /** Only offer the hand as controls when there is actually a choice to make. */
+  const interactive = isDiscard || isPegging;
 
   const selectable = (card: Card) => {
     if (busy) return false;
@@ -118,8 +205,6 @@ export function GameClient({ initial }: { initial: GameDetail }) {
     if (isPegging) return playable.has(card);
     return false;
   };
-
-  const opponentName = detail.opponent?.name ?? "an opponent yet to join";
 
   return (
     <div className="stack">
@@ -130,7 +215,6 @@ export function GameClient({ initial }: { initial: GameDetail }) {
         {view.handNumber > 0 ? `, hand ${view.handNumber}` : ""}
       </h1>
 
-      {/* --- turn indicator --- */}
       <div
         className={`banner${gameOver ? " banner--over" : view.isYourTurn ? " banner--turn" : ""}`}
         role="status"
@@ -169,17 +253,32 @@ export function GameClient({ initial }: { initial: GameDetail }) {
 
       <div className="game-grid">
         <div className="stack">
-          <CribbageBoard
-            names={names}
-            scores={view.scores}
-            prevScores={view.prevScores}
-            you={view.you}
-            target={view.target}
-            winnerSeat={view.winnerSeat}
-          />
+          <div className="board-shell">
+            <CribbageBoard
+              names={names}
+              scores={view.scores}
+              prevScores={view.prevScores}
+              you={view.you}
+              target={view.target}
+              winnerSeat={view.winnerSeat}
+              bumped={bump?.seat ?? null}
+            />
+            {bump && (
+              <span
+                key={bump.key}
+                className="score-float"
+                style={{ color: bump.seat === 0 ? "var(--p0-light)" : "var(--p1-light)" }}
+                aria-hidden="true"
+              >
+                +{bump.delta}
+              </span>
+            )}
+          </div>
 
-          {/* --- the table --- */}
           <section className="table stack" aria-label="Table">
+            {/* Starter and running count bracket the table; the play gets a
+                full-width row of its own so eight cards never wrap awkwardly
+                around them on a phone. */}
             <div className="table-row">
               <div className="stack-sm">
                 <span className="table-label">Starter</span>
@@ -190,24 +289,26 @@ export function GameClient({ initial }: { initial: GameDetail }) {
                 )}
               </div>
 
-              <div className="stack-sm" style={{ flex: 1, minWidth: 200 }}>
-                <span className="table-label">
-                  {view.phase === "pegging" || view.play.history.length > 0
-                    ? "The play"
-                    : " "}
-                </span>
-                <PlayArea view={view} names={names} />
-              </div>
+              <span className="spacer" />
 
               {view.phase === "pegging" && (
-                <div className="count-chip">
+                <div
+                  key={countBump}
+                  className="count-chip count-chip--bump"
+                  aria-label={`The count is ${view.play.total}`}
+                >
                   <span className="count-chip-value">{view.play.total}</span>
                   <span className="count-chip-label">count</span>
                 </div>
               )}
             </div>
 
-            <div className="table-row" style={{ gap: 26 }}>
+            <div className="stack-sm">
+              <span className="table-label">The play</span>
+              <PlayArea view={view} names={names} />
+            </div>
+
+            <div className="table-row">
               <div className="stack-sm">
                 <span className="table-label">
                   {view.youAreDealer ? "Your crib" : `${names[view.dealer]}'s crib`}
@@ -215,13 +316,13 @@ export function GameClient({ initial }: { initial: GameDetail }) {
                 <div className="card-strip card-strip--tight">
                   {view.crib
                     ? view.crib.map((card) => (
-                        <PlayingCard key={card} card={card} small />
+                        <PlayingCard key={card} card={card} size="sm" />
                       ))
                     : Array.from({ length: view.cribSize }, (_, i) => (
-                        <CardBack key={i} small />
+                        <CardBack key={i} size="sm" />
                       ))}
                   {view.cribSize === 0 && !view.crib && (
-                    <span className="small" style={{ opacity: 0.6 }}>
+                    <span className="small" style={{ opacity: 0.55 }}>
                       empty
                     </span>
                   )}
@@ -233,13 +334,13 @@ export function GameClient({ initial }: { initial: GameDetail }) {
                 <div className="card-strip card-strip--tight">
                   {view.opponentHand
                     ? view.opponentHand.map((card) => (
-                        <PlayingCard key={card} card={card} small />
+                        <PlayingCard key={card} card={card} size="sm" />
                       ))
                     : Array.from({ length: view.opponentCardCount }, (_, i) => (
-                        <CardBack key={i} small />
+                        <CardBack key={i} size="sm" />
                       ))}
                   {view.opponentCardCount === 0 && !view.opponentHand && (
-                    <span className="small" style={{ opacity: 0.6 }}>
+                    <span className="small" style={{ opacity: 0.55 }}>
                       no cards
                     </span>
                   )}
@@ -248,7 +349,6 @@ export function GameClient({ initial }: { initial: GameDetail }) {
             </div>
           </section>
 
-          {/* --- your hand --- */}
           <section className="panel panel-pad stack-sm" aria-label="Your hand">
             <div className="row">
               <span className="panel-title">Your hand</span>
@@ -267,26 +367,30 @@ export function GameClient({ initial }: { initial: GameDetail }) {
                     : "Waiting for the next deal."}
                 </p>
               )}
-              {handCards.map((card) => {
-                const isSelected = selected.includes(card);
-                const enabled = selectable(card);
-                return (
+              {handCards.map((card, index) =>
+                interactive ? (
                   <button
                     key={card}
                     type="button"
                     className="pcard-button"
-                    data-selected={isSelected}
-                    disabled={!enabled}
-                    aria-pressed={isSelected}
+                    data-selected={selected.includes(card)}
+                    disabled={!selectable(card)}
+                    aria-pressed={selected.includes(card)}
                     aria-label={`${cardName(card)}${
-                      isPegging && !enabled ? " — would go past 31" : ""
+                      isPegging && !playable.has(card)
+                        ? " — would take the count past 31"
+                        : ""
                     }`}
                     onClick={() => toggle(card)}
                   >
-                    <PlayingCard card={card} />
+                    <PlayingCard card={card} dealIndex={index} />
                   </button>
-                );
-              })}
+                ) : (
+                  // Nothing to choose right now — show the cards, do not offer
+                  // a row of dead buttons.
+                  <PlayingCard key={card} card={card} dealIndex={index} />
+                ),
+              )}
             </div>
 
             <ActionBar
@@ -322,15 +426,22 @@ export function GameClient({ initial }: { initial: GameDetail }) {
           )}
         </div>
 
-        {/* --- side panel --- */}
         <aside className="game-side">
-          <div className="panel">
+          <div className="panel panel--clip">
             <div className="panel-head">
               <span className="panel-title">History</span>
             </div>
-            <HistoryLog log={detail.log} />
+            <HistoryLog log={detail.log} freshAfter={freshAfter} />
           </div>
         </aside>
+      </div>
+
+      <div className="toast-stack" role="status" aria-live="polite">
+        {toasts.map((toast) => (
+          <div key={toast.id} className="toast">
+            {toast.text}
+          </div>
+        ))}
       </div>
     </div>
   );
@@ -338,6 +449,10 @@ export function GameClient({ initial }: { initial: GameDetail }) {
 
 // --- sub-components --------------------------------------------------------
 
+/**
+ * The cards laid this hand. The current run up to 31 is highlighted; earlier
+ * runs stay visible but muted, so you can read the whole hand's play.
+ */
 function PlayArea({
   view,
   names,
@@ -345,24 +460,29 @@ function PlayArea({
   view: GameDetail["view"];
   names: [string, string];
 }) {
-  const shown = view.play.sequence.length > 0 ? view.play.sequence : view.play.history;
-  if (shown.length === 0) {
+  const history = view.play.history;
+  if (history.length === 0) {
     return (
-      <p className="small" style={{ opacity: 0.62 }}>
+      <p className="small" style={{ opacity: 0.58 }}>
         {view.phase === "discard"
           ? "Cards go down once both players have discarded."
           : "No cards played yet."}
       </p>
     );
   }
+
+  const currentFrom = history.length - view.play.sequence.length;
+
   return (
     <div className="card-strip card-strip--tight">
-      {shown.map((played, index) => (
-        <div key={`${played.card}-${index}`} className="stack-sm" style={{ gap: 4 }}>
-          <PlayingCard card={played.card} small />
+      {history.map((played, index) => (
+        <div
+          key={`${played.card}-${index}`}
+          className={`played${index >= currentFrom ? " played--current" : ""}`}
+        >
+          <PlayingCard card={played.card} size="sm" laid />
           <span
-            className="tiny num"
-            style={{ textAlign: "center", opacity: 0.7 }}
+            className="played-total"
             title={`${names[played.seat]} — running total ${played.total}`}
           >
             {played.total}
@@ -417,7 +537,9 @@ function ActionBar({
         disabled={busy || selected.length !== 1}
         onClick={onPlay}
       >
-        {selected.length === 1 ? `Play ${cardLabel(selected[0]!)}` : "Select a card to play"}
+        {selected.length === 1
+          ? `Play ${cardLabel(selected[0]!)}`
+          : "Select a card to play"}
       </button>
     );
   }

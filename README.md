@@ -36,6 +36,7 @@ for you.
 | Database   | Prisma 6 — SQLite locally, Postgres in production           |
 | Auth       | Magic links + a stateless, HMAC-signed session cookie       |
 | Styling    | One hand-written stylesheet; no UI framework                |
+| Typography | Fraunces (display) and Inter (UI) via `next/font`            |
 | Tests      | Vitest for the engine, a scripted HTTP smoke test for the app |
 
 The whole thing runs comfortably on a free tier: one Node process, one small
@@ -353,4 +354,42 @@ Upstash before scaling out.
 
 **Cards keep their ivory face in both themes.** A playing card is a physical
 object, not a UI surface — inverting it in dark mode makes the table harder to
-read, not easier.
+read, not easier. Everything around them — page, felt, board — has a full light
+and dark palette driven by `prefers-color-scheme`.
+
+**No CSS framework, on purpose.** The felt, the wood grain, the carved track
+and the card faces are layered gradients, SVG and motion paths; utility classes
+would wrap all of that in arbitrary-value escapes and add a build dependency
+without changing a pixel. `globals.css` is token-driven instead: one palette at
+the top, redeclared for dark mode, and every component reads from it. If you do
+want Tailwind, the tokens map onto a theme config cleanly.
+
+**The board is real geometry, not a progress bar.** One function generates both
+the SVG path for a player's lane and the position of all 121 holes, so the pegs
+land exactly in their holes by construction. Each lane runs out along the top
+row, turns at the far end, and comes back — the shape of an actual board. Pegs
+are positioned with `offset-path`/`offset-distance`, so a score change walks
+them down the track and around the turn rather than sliding across the board.
+The back peg marks the previous score, which is how a real board shows the size
+of the last award.
+
+**Cards are drawn, not typeset.** `PlayingCard` renders a real pip layout — a
+seven is six pips plus one raised to the upper centre, a nine is four pairs
+around a single middle pip — with the lower half rotated as on a printed deck.
+Court cards get an engraved panel. Being SVG, the same component is crisp as a
+30px crib thumbnail and as a full-size card in hand. The gradients and the back
+pattern live in a single sprite in the root layout so a table full of cards
+does not repeat the same ids twenty times.
+
+**Motion is used to answer questions, not to decorate.** Cards animate in when
+dealt and drop onto the table when laid; the running count pulses when it
+moves; a score change pops the number and floats the delta off the board; new
+log lines slide in; an opponent's move raises a toast; and the tab title
+becomes "● Your turn" so a backgrounded tab tells you something happened. All
+of it collapses under `prefers-reduced-motion: reduce`.
+
+**Fonts are fetched at build time.** `next/font/google` downloads Fraunces and
+Inter during `next build` and self-hosts them, so there is no runtime request
+to Google — but the build machine does need network access the first time.
+Swap to `next/font/local` with committed `.woff2` files if you need a fully
+offline build.
