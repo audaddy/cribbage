@@ -338,7 +338,17 @@ export function GameClient({ initial }: { initial: GameDetail }) {
             </div>
 
             <div className="stack-sm">
-              <span className="table-label">The play</span>
+              <div className="row" style={{ gap: 10 }}>
+                <span className="table-label">The play</span>
+                {view.phase === "pegging" &&
+                  ([0, 1] as Seat[])
+                    .filter((seat) => view.play.goSaid[seat])
+                    .map((seat) => (
+                      <span key={seat} className="go-chip">
+                        {seat === view.you ? "You said" : `${names[seat]} said`} “go”
+                      </span>
+                    ))}
+              </div>
               <PlayArea view={view} names={names} />
             </div>
 
@@ -583,6 +593,14 @@ function PlayArea({
           className={`played${index >= currentFrom ? " played--current" : ""}`}
         >
           <PlayingCard card={played.card} size="sm" laid />
+          {/* Whose card this was, without having to read the log. */}
+          <span
+            className="played-owner"
+            style={{
+              background: played.seat === 0 ? "var(--p0)" : "var(--p1)",
+            }}
+            aria-hidden="true"
+          />
           <span
             className="played-total"
             title={`${names[played.seat]} — running total ${played.total}`}
@@ -616,6 +634,8 @@ function ActionBar({
   onPlay: () => void;
   onCount: () => void;
 }) {
+  const spinner = <span className="spinner" aria-hidden="true" />;
+
   if (isDiscard) {
     return (
       <button
@@ -624,6 +644,7 @@ function ActionBar({
         disabled={busy || selected.length !== 2}
         onClick={onDiscard}
       >
+        {busy && spinner}
         {selected.length === 2
           ? `Lay away ${selected.map((c) => cardLabel(c)).join(" and ")}`
           : "Select two cards for the crib"}
@@ -639,6 +660,7 @@ function ActionBar({
         disabled={busy || selected.length !== 1}
         onClick={onPlay}
       >
+        {busy && spinner}
         {selected.length === 1
           ? `Play ${cardLabel(selected[0]!)}`
           : "Select a card to play"}
@@ -654,6 +676,7 @@ function ActionBar({
         disabled={busy}
         onClick={onCount}
       >
+        {busy && spinner}
         {countLabel === "crib" ? "Count the crib" : "Count my hand"}
       </button>
     );

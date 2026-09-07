@@ -133,41 +133,107 @@ function CornerIndex({ rank, suit }: { rank: number; suit: Suit }) {
   );
 }
 
+/**
+ * Headwear for the court cards, drawn in a 100x100 box.
+ *
+ * Real court cards carry a mirrored figure. A whole figure turns to mush at
+ * the size a card is actually read here, so each rank gets one graphic motif
+ * instead — a peaked crown, a pearled coronet, a feathered cap — mirrored top
+ * and bottom the way the printed cards are.
+ */
+const COURT_MOTIF: Record<number, ReactNode> = {
+  13: (
+    <g>
+      <path d="M10 78V30l18 18 22-32 22 32 18-18v48Z" />
+      <rect x="10" y="80" width="80" height="13" rx="3" />
+      <circle cx="10" cy="25" r="6" />
+      <circle cx="50" cy="11" r="7" />
+      <circle cx="90" cy="25" r="6" />
+    </g>
+  ),
+  12: (
+    <g>
+      <path d="M15 79V45c0-15 16-24 35-24s35 9 35 24v34Z" />
+      <rect x="12" y="80" width="76" height="12" rx="3" />
+      <circle cx="26" cy="30" r="6" />
+      <circle cx="50" cy="16" r="7.5" />
+      <circle cx="74" cy="30" r="6" />
+    </g>
+  ),
+  // A plume rather than a cap: at the size a card is read, a feather keeps a
+  // silhouette where headgear turns into a blob.
+  11: (
+    <g>
+      <path d="M56 4c-22 18-33 45-28 76l6 18 12-20c17-26 21-50 10-74Z" />
+      <g stroke="currentColor" strokeWidth="4" strokeLinecap="round" fill="none">
+        <path d="M42 40 58 27" />
+        <path d="M39 56 57 44" />
+        <path d="M38 72 54 62" />
+      </g>
+      <rect x="20" y="84" width="60" height="11" rx="4" />
+    </g>
+  ),
+};
+
 /** Court cards get an engraved panel rather than pips. */
 function CourtPanel({ rank, suit }: { rank: number; suit: Suit }) {
+  const motif = COURT_MOTIF[rank];
   return (
     <g>
+      {/* Double rule, as a printed court card carries. */}
       <rect
-        x="21"
-        y="27"
-        width="58"
-        height="86"
+        x="20"
+        y="26"
+        width="60"
+        height="88"
         rx="5"
         fill="currentColor"
-        fillOpacity="0.07"
+        fillOpacity="0.06"
         stroke="currentColor"
-        strokeOpacity="0.42"
-        strokeWidth="1.2"
+        strokeOpacity="0.45"
+        strokeWidth="1.3"
       />
-      <line
-        x1="24"
-        y1="70"
-        x2="76"
-        y2="70"
+      <rect
+        x="23"
+        y="29"
+        width="54"
+        height="82"
+        rx="3"
+        fill="none"
         stroke="currentColor"
-        strokeOpacity="0.22"
-        strokeWidth="1"
+        strokeOpacity="0.24"
+        strokeWidth="0.7"
       />
-      <Pip suit={suit} x={50} y={47} size={22} />
-      <Pip suit={suit} x={50} y={93} size={22} flip />
+
+      <g opacity="0.9">
+        <g transform="translate(50 46) scale(0.28) translate(-50 -50)">{motif}</g>
+        <g transform="translate(50 94) rotate(180) scale(0.28) translate(-50 -50)">
+          {motif}
+        </g>
+      </g>
+
+      {/* Centre band carrying the rank, flanked by the suit. */}
+      <rect
+        x="23"
+        y="62"
+        width="54"
+        height="16"
+        fill="currentColor"
+        fillOpacity="0.12"
+      />
+      <line x1="23" y1="62" x2="77" y2="62" stroke="currentColor" strokeOpacity="0.3" strokeWidth="0.7" />
+      <line x1="23" y1="78" x2="77" y2="78" stroke="currentColor" strokeOpacity="0.3" strokeWidth="0.7" />
+      <Pip suit={suit} x={30} y={70} size={10} />
+      <Pip suit={suit} x={70} y={70} size={10} />
       <text
         x="50"
         y="70"
         textAnchor="middle"
         dominantBaseline="central"
-        fontSize="30"
+        fontSize="17"
         fontWeight="700"
         fontFamily="var(--font-head)"
+        letterSpacing="0.5"
       >
         {rankText(rank)}
       </text>
