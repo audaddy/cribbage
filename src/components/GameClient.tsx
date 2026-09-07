@@ -7,6 +7,7 @@ import { type Card, type Seat, cardLabel } from "@/lib/cribbage";
 import { CribbageBoard } from "./CribbageBoard";
 import { HistoryLog } from "./HistoryLog";
 import { CardBack, PlayingCard, cardName } from "./PlayingCard";
+import { Burst, Confetti, useCountUp } from "./motion";
 
 /** Poll faster while waiting on the opponent than while the board is yours. */
 const POLL_WAITING_MS = 6000;
@@ -28,15 +29,19 @@ export function GameClient({ initial }: { initial: GameDetail }) {
   const [bump, setBump] = useState<{ seat: Seat; delta: number; key: number } | null>(
     null,
   );
-  const [countBump, setCountBump] = useState(0);
+  /** True for the moment after a deal, while cards fly in from the deck. */
+  const [dealing, setDealing] = useState(true);
+  /** Increments each time the turn comes back to you, to re-run the sheen. */
+  const [turnArrival, setTurnArrival] = useState(0);
   /** Log seq at the moment of the last update; anything above it is new. */
   const [freshAfter, setFreshAfter] = useState<number | null>(null);
 
   const inFlight = useRef(false);
   const detailRef = useRef(detail);
   const scoresRef = useRef(detail.view.scores);
-  const totalRef = useRef(detail.view.play.total);
   const toastId = useRef(0);
+  const handRef = useRef(detail.view.handNumber);
+  const wasYourTurn = useRef(detail.view.isYourTurn);
 
   const { view } = detail;
   const names: [string, string] =
@@ -127,13 +132,27 @@ export function GameClient({ initial }: { initial: GameDetail }) {
     scoresRef.current = after;
   }, [view.scores]);
 
-  // The running count pulses whenever it moves.
+  // A fresh deal sends the hand flying in from the deck.
   useEffect(() => {
-    if (totalRef.current !== view.play.total) {
-      totalRef.current = view.play.total;
-      setCountBump((n) => n + 1);
+    if (handRef.current !== view.handNumber) {
+      handRef.current = view.handNumber;
+      setDealing(true);
     }
-  }, [view.play.total]);
+  }, [view.handNumber]);
+
+  useEffect(() => {
+    if (!dealing) return;
+    const timer = window.setTimeout(() => setDealing(false), 1100);
+    return () => window.clearTimeout(timer);
+  }, [dealing]);
+
+  // Light sweeps the felt when the board becomes yours again.
+  useEffect(() => {
+    if (view.isYourTurn && !wasYourTurn.current) {
+      setTurnArrival((n) => n + 1);
+    }
+    wasYourTurn.current = view.isYourTurn;
+  }, [view.isYourTurn]);
 
   // Tell a backgrounded tab that it is your move.
   useEffect(() => {
@@ -263,6 +282,7 @@ export function GameClient({ initial }: { initial: GameDetail }) {
               winnerSeat={view.winnerSeat}
               bumped={bump?.seat ?? null}
             />
+            {bump && <Burst key={`burst-${bump.key}`} seat={bump.seat} points={bump.delta} />}
             {bump && (
               <span
                 key={bump.key}
@@ -276,6 +296,9 @@ export function GameClient({ initial }: { initial: GameDetail }) {
           </div>
 
           <section className="table stack" aria-label="Table">
+            {view.isYourTurn && !gameOver && (
+              <span key={turnArrival} className="table-sheen" aria-hidden="true" />
+            )}
             {/* Starter and running count bracket the table; the play gets a
                 full-width row of its own so eight cards never wrap awkwardly
                 around them on a phone. */}
@@ -283,24 +306,35 @@ export function GameClient({ initial }: { initial: GameDetail }) {
               <div className="stack-sm">
                 <span className="table-label">Starter</span>
                 {view.starter ? (
-                  <PlayingCard card={view.starter} starter />
+                  <div className="flip" key={view.starter}>
+                    <div className="flip-inner">
+                      <div className="flip-face">
+                        <PlayingCard card={view.starter} starter />
+                      </div>
+                      <div className="flip-face flip-face--back">
+                        <CardBack />
+                      </div>
+                    </div>
+                  </div>
                 ) : (
                   <div className="pcard-slot" />
                 )}
               </div>
 
-              <span className="spacer" />
-
-              {view.phase === "pegging" && (
-                <div
-                  key={countBump}
-                  className="count-chip count-chip--bump"
-                  aria-label={`The count is ${view.play.total}`}
-                >
-                  <span className="count-chip-value">{view.play.total}</span>
-                  <span className="count-chip-label">count</span>
+              {view.phase !== "awaiting_opponent" && (
+                <div className="stack-sm">
+                  <span className="table-label">Deck</span>
+                  <div className="deck" aria-hidden="true">
+                    <span className="deck-card" />
+                    <span className="deck-card" />
+                    <span className="deck-card" />
+                  </div>
                 </div>
               )}
+
+              <span className="spacer" />
+
+              {view.phase === "pegging" && <CountChip total={view.play.total} />}
             </div>
 
             <div className="stack-sm">
@@ -359,39 +393,58 @@ export function GameClient({ initial }: { initial: GameDetail }) {
               )}
             </div>
 
-            <div className="card-strip">
-              {handCards.length === 0 && (
-                <p className="small muted">
-                  {view.phase === "pegging"
-                    ? "You have played all your cards."
-                    : "Waiting for the next deal."}
-                </p>
-              )}
-              {handCards.map((card, index) =>
-                interactive ? (
-                  <button
-                    key={card}
-                    type="button"
-                    className="pcard-button"
-                    data-selected={selected.includes(card)}
-                    disabled={!selectable(card)}
-                    aria-pressed={selected.includes(card)}
-                    aria-label={`${cardName(card)}${
-                      isPegging && !playable.has(card)
-                        ? " — would take the count past 31"
-                        : ""
-                    }`}
-                    onClick={() => toggle(card)}
-                  >
-                    <PlayingCard card={card} dealIndex={index} />
-                  </button>
-                ) : (
-                  // Nothing to choose right now — show the cards, do not offer
-                  // a row of dead buttons.
-                  <PlayingCard key={card} card={card} dealIndex={index} />
-                ),
-              )}
-            </div>
+            {handCards.length === 0 ? (
+              <p className="small muted">
+                {view.phase === "pegging"
+                  ? "You have played all your cards."
+                  : "Waiting for the next deal."}
+              </p>
+            ) : (
+              <div className="hand">
+                {handCards.map((card, index) => {
+                  // Splay the cards around the middle of the hand, the way
+                  // they sit when you actually hold them.
+                  const middle = (handCards.length - 1) / 2;
+                  const fan = {
+                    "--angle": `${(index - middle) * 5}deg`,
+                    "--arc": `${(index - middle) ** 2 * 2.4}px`,
+                    "--i": index,
+                  } as React.CSSProperties;
+
+                  const label = `${cardName(card)}${
+                    isPegging && !playable.has(card)
+                      ? " — would take the count past 31"
+                      : ""
+                  }`;
+
+                  return interactive ? (
+                    <button
+                      key={card}
+                      type="button"
+                      className={`hand-card${dealing ? " hand-card--dealing" : ""}`}
+                      style={fan}
+                      data-selected={selected.includes(card)}
+                      disabled={!selectable(card)}
+                      aria-pressed={selected.includes(card)}
+                      aria-label={label}
+                      onClick={() => toggle(card)}
+                    >
+                      <PlayingCard card={card} />
+                    </button>
+                  ) : (
+                    // Nothing to choose right now — show the cards, do not
+                    // offer a row of dead buttons.
+                    <span
+                      key={card}
+                      className={`hand-card${dealing ? " hand-card--dealing" : ""}`}
+                      style={fan}
+                    >
+                      <PlayingCard card={card} />
+                    </span>
+                  );
+                })}
+              </div>
+            )}
 
             <ActionBar
               busy={busy}
@@ -411,18 +464,29 @@ export function GameClient({ initial }: { initial: GameDetail }) {
             />
           </section>
 
-          {gameOver && (
-            <div className="panel panel-pad row-wrap">
-              <span className="banner-text">
-                {view.winnerSeat === view.you
-                  ? "You won this one."
-                  : `${names[view.winnerSeat ?? 0]} took it.`}
-              </span>
-              <span className="spacer" />
-              <Link className="btn" href="/games">
-                Back to your games
-              </Link>
-            </div>
+          {gameOver && view.winnerSeat !== null && (
+            <>
+              {view.winnerSeat === view.you && <Confetti seat={view.you} />}
+              <div className="panel winner-card stack-sm">
+                <span className="table-label">
+                  {marginLabel(view.scores, view.winnerSeat)}
+                </span>
+                <h2 className="winner-title">
+                  {view.winnerSeat === view.you
+                    ? "You won."
+                    : `${names[view.winnerSeat]} took it.`}
+                </h2>
+                <p className="winner-score">
+                  {view.scores[view.winnerSeat]}–
+                  {view.scores[view.winnerSeat === 0 ? 1 : 0]}
+                </p>
+                <div className="row-wrap" style={{ justifyContent: "center", marginTop: 10 }}>
+                  <Link className="btn btn-primary" href="/games">
+                    Back to your games
+                  </Link>
+                </div>
+              </div>
+            </>
           )}
         </div>
 
@@ -448,6 +512,44 @@ export function GameClient({ initial }: { initial: GameDetail }) {
 }
 
 // --- sub-components --------------------------------------------------------
+
+/**
+ * The running count, rolled rather than snapped: watching 22 climb to 27 is
+ * how you read what just happened without going to the log.
+ */
+function CountChip({ total }: { total: number }) {
+  const shown = useCountUp(total);
+  const [pop, setPop] = useState(false);
+  const previous = useRef(total);
+
+  useEffect(() => {
+    if (previous.current === total) return;
+    previous.current = total;
+    setPop(true);
+    const timer = window.setTimeout(() => setPop(false), 470);
+    return () => window.clearTimeout(timer);
+  }, [total]);
+
+  return (
+    <div
+      className={`count-chip${pop ? " count-chip--bump" : ""}`}
+      aria-label={`The count is ${total}`}
+    >
+      <span className="count-chip-value" aria-hidden="true">
+        {shown}
+      </span>
+      <span className="count-chip-label">count</span>
+    </div>
+  );
+}
+
+/** Cribbage names the margin: under 91 is a skunk, under 61 a double skunk. */
+function marginLabel(scores: [number, number], winner: Seat): string {
+  const loser = scores[winner === 0 ? 1 : 0];
+  if (loser < 61) return "Double skunk";
+  if (loser < 91) return "Skunk";
+  return "Game";
+}
 
 /**
  * The cards laid this hand. The current run up to 31 is highlighted; earlier

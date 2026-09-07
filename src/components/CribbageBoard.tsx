@@ -285,23 +285,26 @@ export function CribbageBoard({
                   </g>
                 )}
 
-                {/* Front peg: the current score. */}
+                {/* Front peg: the current score. The group rides the motion
+                    path; the body inside hops as it goes. */}
                 <g
-                  className="peg peg--front"
+                  className={`peg peg--front${bumped === seat ? " peg--hopping" : ""}`}
                   style={{
                     offsetPath: `path("${path}")`,
                     offsetDistance: `${distanceFor(scores[seat])}px`,
                   }}
                 >
-                  <ellipse cx="0.8" cy="2.4" rx="5" ry="2.2" fill="rgb(0 0 0 / 0.35)" />
-                  <circle
-                    r="5"
-                    fill={pegColor(seat)}
-                    stroke="rgb(0 0 0 / 0.4)"
-                    strokeWidth="0.9"
-                  />
-                  <circle cx="-1.4" cy="-1.6" r="1.8" fill={pegHighlight(seat)} />
-                  <circle cx="-1.9" cy="-2.1" r="0.8" fill="rgb(255 255 255 / 0.75)" />
+                  <g className="peg-body">
+                    <ellipse cx="0.8" cy="2.4" rx="5" ry="2.2" fill="rgb(0 0 0 / 0.35)" />
+                    <circle
+                      r="5"
+                      fill={pegColor(seat)}
+                      stroke="rgb(0 0 0 / 0.4)"
+                      strokeWidth="0.9"
+                    />
+                    <circle cx="-1.4" cy="-1.6" r="1.8" fill={pegHighlight(seat)} />
+                    <circle cx="-1.9" cy="-2.1" r="0.8" fill="rgb(255 255 255 / 0.75)" />
+                  </g>
                 </g>
               </g>
             );
