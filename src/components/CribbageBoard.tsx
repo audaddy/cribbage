@@ -361,17 +361,24 @@ export function CribbageBoard({
                   const isGame = score === GAME_HOLE;
                   return (
                     <g key={score}>
+                      {/* Countersunk rim, the bore, then the lit far wall. */}
                       <circle
                         cx={x}
-                        cy={y}
-                        r={isGame ? 2.8 : isFifth ? 2.1 : 1.7}
-                        fill="rgb(0 0 0 / 0.52)"
+                        cy={y + 0.5}
+                        r={isGame ? 3.4 : isFifth ? 2.7 : 2.3}
+                        fill="rgb(255 235 205 / 0.09)"
                       />
                       <circle
                         cx={x}
-                        cy={y + 0.7}
-                        r={isGame ? 2.4 : isFifth ? 1.7 : 1.35}
-                        fill="rgb(255 255 255 / 0.07)"
+                        cy={y}
+                        r={isGame ? 2.8 : isFifth ? 2.1 : 1.75}
+                        fill="rgb(0 0 0 / 0.6)"
+                      />
+                      <circle
+                        cx={x}
+                        cy={y + 0.55}
+                        r={isGame ? 2.2 : isFifth ? 1.6 : 1.3}
+                        fill="rgb(120 80 40 / 0.35)"
                       />
                     </g>
                   );

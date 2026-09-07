@@ -268,17 +268,14 @@ export function CardDefs() {
         </linearGradient>
         <pattern
           id="backLattice"
-          width="10"
-          height="10"
+          width="6"
+          height="6"
           patternUnits="userSpaceOnUse"
           patternTransform="rotate(45)"
         >
-          <path
-            d="M0 0h10M0 5h10"
-            stroke="rgb(255 255 255 / 0.16)"
-            strokeWidth="1.1"
-          />
-          <path d="M0 0v10M5 0v10" stroke="rgb(255 255 255 / 0.1)" strokeWidth="1" />
+          <path d="M0 0h6M0 3h6" stroke="rgb(255 255 255 / 0.13)" strokeWidth="0.7" />
+          <path d="M0 0v6M3 0v6" stroke="rgb(255 255 255 / 0.09)" strokeWidth="0.6" />
+          <circle cx="3" cy="3" r="0.7" fill="rgb(255 255 255 / 0.14)" />
         </pattern>
       </defs>
     </svg>
@@ -372,22 +369,54 @@ export function CardBack({ size = "md" }: { size?: CardSize }) {
   return (
     <span className={`pcard pcard--back-stock${SIZE_CLASS[size]}`}>
     <svg viewBox="0 0 100 140" role="img" aria-label="face-down card">
-      <rect x="0" y="0" width="100" height="140" rx="9" fill="url(#backField)" />
-      <rect x="5" y="5" width="90" height="130" rx="5" fill="url(#backLattice)" />
+      {/* Printed cards leave a white margin of stock around the back
+          pattern; without it a back reads as a coloured rectangle. */}
+      <rect x="0" y="0" width="100" height="140" rx="9" fill="url(#cardFace)" />
+      <rect x="6" y="6" width="88" height="128" rx="5" fill="url(#backField)" />
+      <rect x="6" y="6" width="88" height="128" rx="5" fill="url(#backLattice)" />
       <rect
-        x="5"
-        y="5"
-        width="90"
-        height="130"
+        x="6"
+        y="6"
+        width="88"
+        height="128"
         rx="5"
         fill="none"
-        stroke="rgb(255 255 255 / 0.3)"
-        strokeWidth="1.4"
+        stroke="rgb(255 255 255 / 0.28)"
+        strokeWidth="1"
       />
-      <circle cx="50" cy="70" r="15" fill="rgb(0 0 0 / 0.2)" />
-      <g fill="rgb(255 255 255 / 0.35)">
-        <Pip suit="S" x={50} y={70} size={18} />
+      <rect
+        x="9.5"
+        y="9.5"
+        width="81"
+        height="121"
+        rx="3"
+        fill="none"
+        stroke="rgb(255 255 255 / 0.16)"
+        strokeWidth="0.8"
+      />
+
+      {/* Centre medallion. */}
+      <circle cx="50" cy="70" r="17" fill="rgb(10 26 44 / 0.55)" />
+      <circle
+        cx="50"
+        cy="70"
+        r="17"
+        fill="none"
+        stroke="rgb(255 255 255 / 0.3)"
+        strokeWidth="0.9"
+      />
+      <circle
+        cx="50"
+        cy="70"
+        r="13.5"
+        fill="none"
+        stroke="rgb(255 255 255 / 0.18)"
+        strokeWidth="0.6"
+      />
+      <g fill="rgb(255 255 255 / 0.4)">
+        <Pip suit="S" x={50} y={70} size={16} />
       </g>
+
       <rect
         x="0.7"
         y="0.7"
@@ -395,7 +424,7 @@ export function CardBack({ size = "md" }: { size?: CardSize }) {
         height="138.6"
         rx="8.4"
         fill="none"
-        stroke="rgb(0 0 0 / 0.3)"
+        stroke="rgb(0 0 0 / 0.22)"
         strokeWidth="1.4"
       />
     </svg>
