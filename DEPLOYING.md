@@ -38,17 +38,19 @@ committed — `.env` is ignored, and `.env.example` holds only placeholders.
    `vercel.json` already tells it to run migrations before building.
 3. Add these environment variables before the first deploy:
 
-   | Name           | Value                                                     |
-   | -------------- | --------------------------------------------------------- |
-   | `DATABASE_URL` | the pooled Neon string from step 2                         |
-   | `AUTH_SECRET`  | run `openssl rand -base64 48` and paste the result         |
-   | `APP_URL`      | `https://your-project.vercel.app` — fill in after step 4   |
+   | Name           | Value                                              |
+   | -------------- | -------------------------------------------------- |
+   | `DATABASE_URL` | the pooled Neon string from step 2                  |
+   | `AUTH_SECRET`  | run `openssl rand -base64 48` and paste the result  |
+
+   Both must be set **before** the first deploy: the build runs
+   `prisma migrate deploy`, which needs a reachable database.
+
+   You do not need to set `APP_URL`. Vercel exposes the project's stable
+   production domain as `VERCEL_PROJECT_PRODUCTION_URL`, and invite links fall
+   back to it. Set `APP_URL` only when you put a custom domain in front.
 
 4. Deploy. Vercel assigns a URL like `https://cribbage-xyz.vercel.app`.
-5. Set `APP_URL` to that exact URL (no trailing slash) and redeploy.
-
-   **This step matters.** Invite links are built from `APP_URL`. Get it wrong
-   and you will text people links that point at `localhost`.
 
 ## 4. Play
 

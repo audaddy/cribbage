@@ -34,8 +34,24 @@ export const env = {
   get authSecret() {
     return authSecret();
   },
+  /**
+   * Public origin. Invite and sign-in links are built from it, so getting it
+   * wrong means texting people links that point somewhere useless.
+   *
+   * On Vercel this can be inferred: VERCEL_PROJECT_PRODUCTION_URL is the
+   * project's stable production domain, which is exactly what an invite link
+   * needs. (VERCEL_URL is deliberately not used — it changes with every
+   * deployment, so links built from it would rot.) Setting APP_URL explicitly
+   * still wins, which is what a custom domain needs.
+   */
   get appUrl() {
-    return (optional("APP_URL") ?? "http://localhost:3000").replace(/\/$/, "");
+    const explicit = optional("APP_URL");
+    if (explicit) return explicit.replace(/\/$/, "");
+
+    const vercel = optional("VERCEL_PROJECT_PRODUCTION_URL");
+    if (vercel) return `https://${vercel.replace(/\/$/, "")}`;
+
+    return "http://localhost:3000";
   },
   get magicLinkTtlMinutes() {
     return number("MAGIC_LINK_TTL_MINUTES", 15);
