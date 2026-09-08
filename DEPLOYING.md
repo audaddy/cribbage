@@ -21,15 +21,18 @@ committed — `.env` is ignored, and `.env.example` holds only placeholders.
 
 1. Go to <https://neon.tech> and sign in with GitHub.
 2. Create a project. Any region near you is fine.
-3. Copy the **pooled** connection string. It looks like:
+3. Open **Connect** and copy the connection string twice — once with
+   connection pooling on, once with it off. You need both:
 
    ```
-   postgresql://user:password@ep-something-pooler.region.aws.neon.tech/neondb?sslmode=require
+   pooled  postgresql://…@ep-something-pooler.region.aws.neon.tech/neondb?sslmode=require
+   direct  postgresql://…@ep-something.region.aws.neon.tech/neondb?sslmode=require
    ```
 
-   The word `pooler` matters. Vercel runs your code as serverless functions
-   that open many short-lived connections, and a direct connection string will
-   run out of them.
+   The app uses the pooled one: Vercel runs your code as serverless functions
+   that open many short-lived connections, and a direct connection runs out of
+   them. Migrations use the direct one, because they take advisory locks and
+   run DDL in transactions and neither survives a transaction-mode pooler.
 
 ## 3. Deploy to Vercel
 
@@ -40,7 +43,8 @@ committed — `.env` is ignored, and `.env.example` holds only placeholders.
 
    | Name           | Value                                              |
    | -------------- | -------------------------------------------------- |
-   | `DATABASE_URL` | the pooled Neon string from step 2                  |
+   | `DATABASE_URL` | the **pooled** Neon string (hostname has `-pooler`) |
+   | `DIRECT_URL`   | the **direct** Neon string (no `-pooler`)           |
    | `AUTH_SECRET`  | run `openssl rand -base64 48` and paste the result  |
 
    Both must be set **before** the first deploy: the build runs
