@@ -35,6 +35,9 @@ model User {
   displayName String
   /// True until the account has an email attached to it.
   isGuest     Boolean  @default(true)
+  /// The computer opponent. Has no session, never signs in, and is shared by
+  /// every player rather than created per game.
+  isBot       Boolean  @default(false)
   createdAt   DateTime @default(now())
 
   gamesAsPlayer0 Game[]             @relation("Player0")

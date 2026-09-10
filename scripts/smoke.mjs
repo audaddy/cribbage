@@ -102,6 +102,44 @@ function assertNoLeak(detail, opponentHand) {
   }
 }
 
+/**
+ * Plays a whole game against the computer the way the browser does: the human
+ * moves when it is their turn, and nudges the bot endpoint when it is not.
+ */
+async function playTheComputer(player, spectator) {
+  const created = await player.json("/api/games/cpu", { method: "POST" });
+  let detail = await player.json(`/api/games/${created.id}`);
+  assert(detail.opponentIsBot, "the client is told it faces the computer");
+  assert(detail.status === "active", "a computer game starts already seated");
+
+  const outsider = await spectator.fetch(`/api/games/${created.id}/bot`, {
+    method: "POST",
+  });
+  assert(outsider.status === 403, `only players may nudge the bot (got ${outsider.status})`);
+
+  let moves = 0;
+  while (detail.view.phase !== "complete") {
+    if (moves++ > 4000) throw new Error("computer game did not finish");
+    detail = await player.json(`/api/games/${created.id}`);
+    if (detail.view.phase === "complete") break;
+
+    if (detail.view.pending.includes(detail.view.you)) {
+      detail = await player.json(`/api/games/${created.id}/move`, {
+        method: "POST",
+        body: JSON.stringify({
+          ...chooseMove(detail.view),
+          version: detail.version,
+        }),
+      });
+    } else {
+      const before = detail.version;
+      detail = await player.json(`/api/games/${created.id}/bot`, { method: "POST" });
+      assert(detail.version > before, "each nudge advances the computer exactly once");
+    }
+  }
+  return { detail, moves };
+}
+
 async function main() {
   const stamp = Date.now();
   const alice = new Player(`alice.${stamp}@example.test`);
@@ -227,8 +265,20 @@ async function main() {
   assert(finalLobby.games[0].status === "complete", "the lobby marks the game complete");
   assert(finalLobby.games[0].isYourTurn === false, "a finished game is nobody's turn");
 
+  console.log("→ playing the computer");
+  const cpu = await playTheComputer(alice, carol);
+  assert(cpu.detail.view.winnerSeat !== null, "the computer game reaches a winner");
+  assert(
+    cpu.detail.view.scores[cpu.detail.view.winnerSeat] === 121,
+    "the computer game ends on exactly 121",
+  );
+
   console.log(
     `\n✓ ${moves} moves, ${detail.log.length} log entries, ${detail.view.handNumber} hands`,
+  );
+  console.log(
+    `✓ computer game: ${cpu.moves} moves, ` +
+      `${cpu.detail.view.scores[0]}–${cpu.detail.view.scores[1]}`,
   );
   console.log(
     `✓ winner: ${winner === 0 ? alice.name : bob.name} ` +

@@ -102,8 +102,8 @@ type GameWithPlayers = Game & {
 };
 
 const withPlayers = {
-  player0: { select: { id: true, displayName: true } },
-  player1: { select: { id: true, displayName: true } },
+  player0: { select: { id: true, displayName: true, isBot: true } },
+  player1: { select: { id: true, displayName: true, isBot: true } },
 } as const;
 
 function namesOf(game: GameWithPlayers): [string, string] {
@@ -176,6 +176,7 @@ export async function getGameDetail(
     version: game.version,
     you: { seat, name: names[seat] },
     opponent: game.player1 ? { name: opponentName } : null,
+    opponentIsBot: (seat === 0 ? game.player1?.isBot : game.player0.isBot) ?? false,
     view: playerView(state, seat, opponentName),
     log: events.map((event) => {
       const parsed: GameEvent = {

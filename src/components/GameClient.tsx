@@ -18,6 +18,8 @@ import {
 /** Poll faster while waiting on the opponent than while the board is yours. */
 const POLL_WAITING_MS = 6000;
 const POLL_ACTIVE_MS = 20000;
+/** How long the computer appears to think before each move. */
+const BOT_THINK_MS = 900;
 const TOAST_MS = 4500;
 const BUMP_MS = 1600;
 
@@ -82,13 +84,9 @@ export function GameClient({ initial }: { initial: GameDetail }) {
 
   // --- polling ------------------------------------------------------------
 
-  const refresh = useCallback(async () => {
-    if (inFlight.current) return;
-    inFlight.current = true;
-    try {
-      const response = await fetch(`/api/games/${initial.id}`, { cache: "no-store" });
-      if (!response.ok) return;
-      const next = (await response.json()) as GameDetail;
+  /** Adopts a server payload, announcing whatever the opponent did in it. */
+  const applyDetail = useCallback(
+    (next: GameDetail) => {
       const current = detailRef.current;
       // Never clobber a newer local state with a stale poll response.
       if (next.version <= current.version) return;
@@ -104,12 +102,23 @@ export function GameClient({ initial }: { initial: GameDetail }) {
 
       setFreshAfter(lastSeen);
       setDetail(next);
+    },
+    [pushToast],
+  );
+
+  const refresh = useCallback(async () => {
+    if (inFlight.current) return;
+    inFlight.current = true;
+    try {
+      const response = await fetch(`/api/games/${initial.id}`, { cache: "no-store" });
+      if (!response.ok) return;
+      applyDetail((await response.json()) as GameDetail);
     } catch {
       /* offline or transient — the next tick will retry */
     } finally {
       inFlight.current = false;
     }
-  }, [initial.id, pushToast]);
+  }, [applyDetail, initial.id]);
 
   useEffect(() => {
     if (view.phase === "complete") return;
@@ -128,6 +137,40 @@ export function GameClient({ initial }: { initial: GameDetail }) {
       window.removeEventListener("focus", onFocus);
     };
   }, [refresh, view.isYourTurn, view.phase]);
+
+  // --- the computer's turn ------------------------------------------------
+
+  /**
+   * The computer plays one card, or makes one discard, per request. Waiting a
+   * beat first is the whole point: the move then lands as its own state change
+   * and gets its own animation, instead of appearing in the same breath as
+   * yours.
+   */
+  const botPending = detail.opponentIsBot && view.pending.includes(view.you === 0 ? 1 : 0);
+
+  useEffect(() => {
+    if (!botPending || view.phase === "complete") return;
+    let cancelled = false;
+    const timer = window.setTimeout(async () => {
+      if (inFlight.current) return;
+      inFlight.current = true;
+      try {
+        const response = await fetch(`/api/games/${initial.id}/bot`, {
+          method: "POST",
+        });
+        if (!response.ok || cancelled) return;
+        applyDetail((await response.json()) as GameDetail);
+      } catch {
+        /* the poll will pick the game back up */
+      } finally {
+        inFlight.current = false;
+      }
+    }, BOT_THINK_MS);
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timer);
+    };
+  }, [applyDetail, botPending, initial.id, view.phase, detail.version]);
 
   // --- reactions to state changes ----------------------------------------
 

@@ -33,6 +33,10 @@ export async function notify({
   type,
   summary,
 }: NotifyInput): Promise<void> {
+  // Games against the computer need no alerts: the opponent answers within the
+  // second, and you are sitting in front of the board when it does.
+  if (recipient.isBot || opponent?.isBot) return;
+
   // Claim the notification first; a duplicate key means it already went out.
   try {
     await prisma.notification.create({

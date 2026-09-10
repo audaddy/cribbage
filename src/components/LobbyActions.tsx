@@ -7,16 +7,20 @@ import { TurnAlerts } from "./TurnAlerts";
 /** New-game and join-by-code controls, plus sign out. */
 export function LobbyActions({ isGuest = false }: { isGuest?: boolean }) {
   const router = useRouter();
-  const [busy, setBusy] = useState<null | "new" | "join" | "out">(null);
+  const [busy, setBusy] = useState<null | "new" | "cpu" | "join" | "out">(null);
   const [code, setCode] = useState("");
   const [showJoin, setShowJoin] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  async function newGame() {
-    setBusy("new");
+  /** Both buttons open a game; only the endpoint differs. */
+  async function start(kind: "new" | "cpu") {
+    setBusy(kind);
     setError(null);
     try {
-      const response = await fetch("/api/games", { method: "POST" });
+      const response = await fetch(
+        kind === "cpu" ? "/api/games/cpu" : "/api/games",
+        { method: "POST" },
+      );
       const body = await response.json();
       if (!response.ok) {
         setError(body.error ?? "Could not start a game.");
@@ -76,10 +80,18 @@ export function LobbyActions({ isGuest = false }: { isGuest?: boolean }) {
         <button
           type="button"
           className="btn btn-primary"
-          onClick={() => void newGame()}
+          onClick={() => void start("new")}
           disabled={busy !== null}
         >
           {busy === "new" ? "Starting…" : "New game"}
+        </button>
+        <button
+          type="button"
+          className="btn"
+          onClick={() => void start("cpu")}
+          disabled={busy !== null}
+        >
+          {busy === "cpu" ? "Dealing…" : "Play the computer"}
         </button>
         <button
           type="button"

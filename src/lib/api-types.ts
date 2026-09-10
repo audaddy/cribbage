@@ -42,6 +42,8 @@ export interface GameDetail {
   version: number;
   you: { seat: Seat; name: string };
   opponent: { name: string } | null;
+  /** True when the opponent is the computer, which the client paces. */
+  opponentIsBot: boolean;
   view: PlayerView;
   log: LogEntry[];
   inviteUrl: string | null;
