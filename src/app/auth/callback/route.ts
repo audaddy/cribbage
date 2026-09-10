@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { consumeMagicLink, setSessionCookie } from "@/lib/server/auth";
+import { consumeMagicLink, currentUser, setSessionCookie } from "@/lib/server/auth";
 import { env } from "@/lib/server/env";
 
 /** Redeems a magic link, starts the session and forwards the player on. */
@@ -12,7 +12,9 @@ export async function GET(request: Request) {
     return NextResponse.redirect(new URL("/login?error=missing", env.appUrl));
   }
 
-  const user = await consumeMagicLink(token);
+  // A guest signing in by email keeps their account, and their games with it.
+  const viewer = await currentUser();
+  const user = await consumeMagicLink(token, viewer);
   if (!user) {
     return NextResponse.redirect(new URL("/login?error=expired", env.appUrl));
   }

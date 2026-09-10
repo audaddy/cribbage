@@ -11,8 +11,8 @@ for you.
 - Every point scored automatically, with a breakdown explaining where it came
   from.
 - As many simultaneous games as you have opponents.
-- Passwordless sign-in for anyone who wants their games to follow them between
-  devices.
+- No account required for anyone, host included — or sign in by email if you
+  want your games to follow you between devices.
 
 **Going live:** see [DEPLOYING.md](DEPLOYING.md) — about fifteen minutes on
 Vercel and Neon, both free at this size.
@@ -378,8 +378,14 @@ mean setting up a mail provider before two people could play at all, and would
 put a sign-up form between a friend and a card game. The single confirmation
 tap is deliberate: it gives the invitee context, and it stops a host from
 taking the second seat in their own game by opening their own link on a phone.
-Guests can attach an email later — `User.email` is nullable and `User.isGuest`
-tracks the state.
+A guest who later signs in by email keeps the account they already have:
+`consumeMagicLink` attaches the address to the current session's guest rather
+than starting a fresh account, so their games come with them. If that address
+already belongs to someone, it signs into that account instead — two accounts
+cannot be safely merged, and pretending otherwise would lose data.
+
+The host gets the same door. Requiring email from whoever starts the game
+would mean standing up a mail provider before two people could play at all.
 
 **Optimistic concurrency instead of locks.** Every move is applied inside a
 transaction guarded by `WHERE version = ?`. Two tabs racing produce one applied

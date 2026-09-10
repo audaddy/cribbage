@@ -58,9 +58,14 @@ committed — `.env` is ignored, and `.env.example` holds only placeholders.
 
 ## 4. Play
 
-1. Open your site and sign in with your email. No mail provider is configured
-   yet, so the sign-in link is written to the server log rather than sent —
-   find it under **Deployments → Logs** in Vercel, or set up email (below).
+1. Open your site and press **Start playing without an account**. You are in
+   immediately, with a name you can change from the lobby.
+
+   Signing in by email works too, but with no mail provider configured the
+   link is written to the server log rather than sent — find it under
+   **Deployments → Logs** in Vercel, or set up email (below). Signing in by
+   email later attaches that address to the account you already have, so your
+   games come with you.
 2. Press **New game** and copy the invite link.
 3. Text it to whoever you want to play.
 
@@ -70,8 +75,8 @@ They tap the link, type a name, and they are in. No account, no email, no app.
 
 ## Optional: email
 
-Only needed for signing back in on a new device, and for turn notifications.
-Guests never need it.
+Nobody needs email to play — not your opponents, and not you. It buys two
+things: signing back in on a different device, and turn notifications.
 
 1. Sign up at <https://resend.com> and create an API key.
 2. Add to Vercel:

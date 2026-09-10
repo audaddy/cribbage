@@ -1737,3 +1737,23 @@ details.disclosure[open] > summary::before { content: "▾ "; }
   margin-inline: 1px;
   vertical-align: baseline;
 }
+
+/* --- "or" divider ------------------------------------------------------- */
+
+.or-rule {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  color: var(--muted);
+  font-size: 0.78rem;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+}
+
+.or-rule::before,
+.or-rule::after {
+  content: "";
+  flex: 1;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, var(--line-strong), transparent);
+}

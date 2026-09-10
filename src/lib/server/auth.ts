@@ -225,8 +225,16 @@ export async function createMagicLink(
  * Redeems a magic-link token, creating the account on first sign-in.
  * Tokens are single-use: the row is marked consumed inside the same query that
  * checks it, so a replayed link cannot mint a second session.
+ *
+ * `claimant` is the guest currently holding this browser's session, if any.
+ * When one is present the email is attached to that account rather than
+ * starting a fresh one — otherwise a guest who later signed in by email would
+ * silently land in a different account and lose every game they had played.
  */
-export async function consumeMagicLink(token: string): Promise<User | null> {
+export async function consumeMagicLink(
+  token: string,
+  claimant?: User | null,
+): Promise<User | null> {
   const tokenHash = hashToken(token);
   const record = await prisma.loginToken.findUnique({ where: { tokenHash } });
   if (!record || record.consumedAt || record.expiresAt < new Date()) return null;
@@ -236,6 +244,18 @@ export async function consumeMagicLink(token: string): Promise<User | null> {
     data: { consumedAt: new Date() },
   });
   if (claimed.count !== 1) return null;
+
+  if (claimant?.isGuest) {
+    // Only if nobody already owns that address — otherwise the right answer is
+    // to sign into the existing account, which the upsert below does.
+    const taken = await prisma.user.findUnique({ where: { email: record.email } });
+    if (!taken) {
+      return prisma.user.update({
+        where: { id: claimant.id },
+        data: { email: record.email, isGuest: false },
+      });
+    }
+  }
 
   return prisma.user.upsert({
     where: { email: record.email },

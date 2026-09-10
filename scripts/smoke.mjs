@@ -124,6 +124,13 @@ async function main() {
     "a new game waits for an opponent",
   );
 
+  console.log("→ the sign-in page offers a way in without email");
+  const loginPage = await (await fetch(`${BASE}/login`)).text();
+  assert(
+    loginPage.includes("Start playing without an account"),
+    "sign-in page offers the guest route",
+  );
+
   console.log("→ the invite link works for a signed-out visitor");
   const anonymous = await fetch(`${BASE}/join/${created.inviteCode}`, {
     redirect: "manual",
