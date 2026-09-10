@@ -90,8 +90,29 @@ things: signing back in on a different device, and turn notifications.
 `onboarding@resend.dev` works without a verified domain, which is enough for a
 couple of players. To email anyone else, verify a domain in Resend first.
 
-Once email is on, "it's your turn" notifications start working too — the hook
-is already written and deduplicated so it never fires twice for the same turn.
+Once email is on, "it's your turn" emails start working too — the hook is
+already written and deduplicated so it never fires twice for the same turn.
+
+---
+
+## Turn notifications
+
+These are on already, over web push, and need no account anywhere: the signing
+keys are generated with `npx web-push generate-vapid-keys` and set as
+`VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY` and `VAPID_SUBJECT`. Without them push
+is simply off and every other delivery path still works.
+
+Each player taps **Notify me when it's my turn** in the lobby once. Push
+reaches guests, which email cannot — a subscription belongs to a browser, and
+so does a guest account.
+
+**On iPhone, notifications only work for a site added to the Home Screen.**
+That is Apple's restriction, not the app's; the lobby says so when it detects
+an iPhone that has not installed the site. Android and desktop just work.
+
+SMS was considered and rejected: sending app-generated texts to US numbers
+requires A2P 10DLC brand and campaign registration with the carriers, which is
+days of paperwork and a monthly fee to tell two people it is their turn.
 
 ---
 

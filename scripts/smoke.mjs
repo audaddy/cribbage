@@ -124,6 +124,15 @@ async function main() {
     "a new game waits for an opponent",
   );
 
+  console.log("→ turn notifications are wired");
+  const anonPush = await fetch(`${BASE}/api/push/subscribe`);
+  assert(anonPush.status === 401, `push keys need a session (got ${anonPush.status})`);
+  const pushKeys = await alice.json("/api/push/subscribe");
+  assert(
+    typeof pushKeys.publicKey === "string" || pushKeys.publicKey === null,
+    "push endpoint reports whether notifications are available",
+  );
+
   console.log("→ the sign-in page offers a way in without email");
   const loginPage = await (await fetch(`${BASE}/login`)).text();
   assert(

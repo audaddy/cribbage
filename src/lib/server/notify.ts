@@ -14,6 +14,7 @@ import type { Game, User } from "@prisma/client";
 import { prisma } from "./db";
 import { env } from "./env";
 import { sendEmail } from "./mail";
+import { pushToUser } from "./push";
 
 export type NotificationType = "your_turn" | "game_over" | "invite_accepted";
 
@@ -59,7 +60,20 @@ export async function notify({
     scores: [game.score0, game.score1],
   };
 
-  const tasks: Promise<unknown>[] = [];
+  const tasks: Promise<unknown>[] = [
+    // Push reaches a guest, who has no address to write to.
+    pushToUser(recipient.id, {
+      title:
+        type === "your_turn"
+          ? `Your turn — ${opponent?.displayName ?? "Cribbage"}`
+          : type === "game_over"
+            ? "Your game has finished"
+            : "Your invite was accepted",
+      body: summary,
+      url,
+      tag: `game-${game.id}`,
+    }).catch((error) => console.error("[notify] push failed", error)),
+  ];
 
   const webhook = env.notifyWebhook;
   if (webhook) {
@@ -90,11 +104,6 @@ export async function notify({
         text: `${summary}\n\n${url}\n`,
       }),
     );
-  }
-
-  if (tasks.length === 0) {
-    console.info(`[notify] ${type} → ${recipient.email}: ${summary} (${url})`);
-    return;
   }
 
   await Promise.allSettled(tasks);

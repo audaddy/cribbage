@@ -37,11 +37,36 @@ model User {
   isGuest     Boolean  @default(true)
   createdAt   DateTime @default(now())
 
-  gamesAsPlayer0 Game[]         @relation("Player0")
-  gamesAsPlayer1 Game[]         @relation("Player1")
+  gamesAsPlayer0 Game[]             @relation("Player0")
+  gamesAsPlayer1 Game[]             @relation("Player1")
   notifications  Notification[]
+  pushDevices    PushSubscription[]
 
   @@index([displayName])
+}
+
+/// A browser that has agreed to receive "your turn" notifications.
+///
+/// Keyed on the endpoint the push service hands out, which is unique per
+/// browser per site — so one person may have several (phone, laptop), and a
+/// guest can have one even though they have no email address.
+model PushSubscription {
+  id     String @id @default(cuid())
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  /// The push service URL to POST to. Unique: re-subscribing the same browser
+  /// must update the existing row rather than pile up duplicates.
+  endpoint String @unique
+  /// Keys the push service needs to encrypt the payload for this browser.
+  p256dh   String
+  auth     String
+
+  createdAt  DateTime @default(now())
+  /// Bumped whenever a send succeeds, so dead devices are identifiable.
+  lastSeenAt DateTime @default(now())
+
+  @@index([userId])
 }
 
 /// Single-use magic-link token. Only the SHA-256 hash is stored, so a database

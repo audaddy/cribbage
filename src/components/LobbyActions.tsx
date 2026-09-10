@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { TurnAlerts } from "./TurnAlerts";
 
 /** New-game and join-by-code controls, plus sign out. */
 export function LobbyActions({ isGuest = false }: { isGuest?: boolean }) {
@@ -88,6 +89,7 @@ export function LobbyActions({ isGuest = false }: { isGuest?: boolean }) {
         >
           Join with a code
         </button>
+        <TurnAlerts />
         <span className="spacer" />
         <button
           type="button"

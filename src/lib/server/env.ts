@@ -73,6 +73,22 @@ export const env = {
         }
       : null;
   },
+  /**
+   * Web push signing keys. Generated once with `npx web-push generate-vapid-keys`
+   * and stored as environment variables; without them push is simply off and
+   * every other delivery path still works.
+   */
+  get vapid() {
+    const publicKey = optional("VAPID_PUBLIC_KEY");
+    const privateKey = optional("VAPID_PRIVATE_KEY");
+    if (!publicKey || !privateKey) return null;
+    return {
+      publicKey,
+      privateKey,
+      // Push services want a contact for the sender; mailto: is the convention.
+      subject: optional("VAPID_SUBJECT") ?? "mailto:noreply@example.com",
+    };
+  },
   get notifyWebhook() {
     const url = optional("NOTIFY_WEBHOOK_URL");
     return url ? { url, token: optional("NOTIFY_WEBHOOK_TOKEN") } : null;
