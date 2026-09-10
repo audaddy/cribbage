@@ -18,7 +18,8 @@
     "postinstall": "prisma generate",
     "smoke": "node scripts/smoke.mjs",
     "bot": "node scripts/dev-bot.mjs",
-    "db:use": "node scripts/use-database.mjs"
+    "db:use": "node scripts/use-database.mjs",
+    "migrate:deploy": "node scripts/migrate.mjs"
   },
   "dependencies": {
     "@prisma/client": "6.19.3",

@@ -23,3 +23,5 @@ prisma/dev.db*
 .idea/
 next-env.d.ts
 *.tsbuildinfo
+.vercel
+.env*
