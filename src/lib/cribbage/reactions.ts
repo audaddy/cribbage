@@ -15,26 +15,23 @@ export type ReactionTone = "jab" | "props";
 export interface Reaction {
   key: string;
   tone: ReactionTone;
-  /** What lands in the other player's log. */
+  /** The line itself. Doubles as the button face: what you press is what you
+   *  send, with nothing lost between the two. */
   text: string;
-  /** Button face. Short — these sit in a row on a phone. */
-  label: string;
 }
 
 export const REACTIONS: readonly Reaction[] = [
-  // "A nineteen hand" is cribbage for a hand worth nothing: nineteen is the
-  // one score four cards and a cut cannot make.
-  { key: "nineteen", tone: "jab", text: "Nineteen.", label: "Nineteen." },
-  { key: "skunk", tone: "jab", text: "Skunk warning.", label: "Skunk warning" },
-  { key: "that_it", tone: "jab", text: "That it?", label: "That it?" },
-  { key: "my_crib", tone: "jab", text: "Keep feeding my crib.", label: "Feed the crib" },
-  { key: "muggins", tone: "jab", text: "Muggins!", label: "Muggins!" },
+  { key: "grandma", tone: "jab", text: "My grandmother pegs better." },
+  { key: "blink", tone: "jab", text: "Blink twice if you need help." },
+  { key: "go_easy", tone: "jab", text: "Should I go easy?" },
+  { key: "clock", tone: "jab", text: "I've seen better hands on a clock." },
+  { key: "womp", tone: "jab", text: "Womp womp." },
 
-  { key: "nice_hand", tone: "props", text: "Nice hand.", label: "Nice hand" },
-  { key: "well_played", tone: "props", text: "Well played.", label: "Well played" },
-  { key: "ouch", tone: "props", text: "Ouch. Respect.", label: "Ouch. Respect." },
-  { key: "great_cut", tone: "props", text: "Great cut.", label: "Great cut" },
-  { key: "earned", tone: "props", text: "You earned that one.", label: "You earned it" },
+  { key: "done_this", tone: "props", text: "You've done this before." },
+  { key: "ouch", tone: "props", text: "Ouch. Respect." },
+  { key: "didnt_see", tone: "props", text: "Didn't see that coming." },
+  { key: "walked_into", tone: "props", text: "I walked into that." },
+  { key: "deserved", tone: "props", text: "Deserved." },
 ] as const;
 
 const BY_KEY = new Map(REACTIONS.map((reaction) => [reaction.key, reaction]));

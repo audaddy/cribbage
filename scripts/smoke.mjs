@@ -207,7 +207,7 @@ async function main() {
   const beforeTalk = await alice.json(`/api/games/${created.id}`);
   const said = await alice.json(`/api/games/${created.id}/react`, {
     method: "POST",
-    body: JSON.stringify({ key: "nineteen" }),
+    body: JSON.stringify({ key: "womp" }),
   });
   assert(said.reactions.length === 1, "the reaction is recorded");
   assert(said.reactions[0].seat === 0, "it is attributed to the speaker");
@@ -220,7 +220,7 @@ async function main() {
 
   const heard = await bob.json(`/api/games/${created.id}`);
   assert(heard.reactions.length === 1, "the other player hears it");
-  assert(heard.reactions[0].key === "nineteen", "with the line intact");
+  assert(heard.reactions[0].key === "womp", "with the line intact");
 
   const nonsense = await alice.fetch(`/api/games/${created.id}/react`, {
     method: "POST",

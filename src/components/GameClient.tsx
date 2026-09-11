@@ -717,7 +717,7 @@ function TableTalk({
                 disabled={disabled}
                 aria-busy={saying === reaction.key}
               >
-                {reaction.label}
+                {reaction.text}
               </button>
             ))}
           </div>

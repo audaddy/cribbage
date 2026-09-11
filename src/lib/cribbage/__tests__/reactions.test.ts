@@ -13,14 +13,16 @@ describe("reactions", () => {
   });
 
   it("resolves a known key and refuses anything else", () => {
-    expect(reactionFor("nineteen")?.text).toBe("Nineteen.");
+    expect(reactionFor("womp")?.text).toBe("Womp womp.");
     expect(reactionFor("drop table")).toBeNull();
     expect(reactionFor("")).toBeNull();
   });
 
-  it("keeps button faces short enough for a phone", () => {
+  it("keeps lines short enough to sit on a button", () => {
+    // Measured against the narrow phone layout: past roughly this length a
+    // chip stops fitting one line of a 375px screen and the row falls apart.
     for (const reaction of REACTIONS) {
-      expect(reaction.label.length).toBeLessThanOrEqual(16);
+      expect(reaction.text.length).toBeLessThanOrEqual(36);
     }
   });
 });
