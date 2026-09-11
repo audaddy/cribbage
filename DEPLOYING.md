@@ -56,6 +56,31 @@ committed — `.env` is ignored, and `.env.example` holds only placeholders.
 
 4. Deploy. Vercel assigns a URL like `https://cribbage-xyz.vercel.app`.
 
+### Commit with an email GitHub knows about
+
+Vercel will not build a commit whose author it cannot trace to a Git account.
+A push from an address that is not on your GitHub account produces a deployment
+stuck at status `BLOCKED` with `buildSkipped: true` — no build logs, no error
+in the dashboard's usual place, just a deploy that never starts:
+
+```
+The deployment was blocked because Vercel couldn't find a Git account
+for the commit author.
+```
+
+Check the author before you wonder about the build queue:
+
+```bash
+git log -1 --format='%ae'
+```
+
+If it is not an address on your GitHub account, either add it there (Settings →
+Emails) or set the right one for this repository:
+
+```bash
+git config user.email you@example.com
+```
+
 ## 4. Play
 
 1. Open your site and press **Start playing without an account**. You are in
