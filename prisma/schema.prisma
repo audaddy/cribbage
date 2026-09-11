@@ -44,6 +44,7 @@ model User {
   gamesAsPlayer1 Game[]             @relation("Player1")
   gamesAsPlayer2 Game[]             @relation("Player2")
   gamesAsPlayer3 Game[]             @relation("Player3")
+  hiddenGames    GameHidden[]
   notifications  Notification[]
   pushDevices    PushSubscription[]
 
@@ -143,6 +144,7 @@ model Game {
   events        GameEvent[]
   notifications Notification[]
   reactions     Reaction[]
+  hiddenBy      GameHidden[]
 
   @@index([player0Id, status])
   @@index([player1Id, status])
@@ -217,4 +219,21 @@ model Reaction {
   createdAt DateTime @default(now())
 
   @@index([gameId, createdAt])
+}
+
+/// A game one player has cleared off their own lobby.
+///
+/// Removal is per person rather than a delete: the other players are still in
+/// that game, and one person tidying their list must not take the record of it
+/// away from everybody else. A game nobody can see any more is swept up.
+model GameHidden {
+  gameId String
+  game   Game   @relation(fields: [gameId], references: [id], onDelete: Cascade)
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  hiddenAt DateTime @default(now())
+
+  @@id([gameId, userId])
+  @@index([userId])
 }

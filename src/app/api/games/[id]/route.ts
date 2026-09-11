@@ -1,5 +1,5 @@
 import { requireUser } from "@/lib/server/auth";
-import { getGameDetail } from "@/lib/server/games";
+import { getGameDetail, hideGame } from "@/lib/server/games";
 import { handleError, json } from "@/lib/server/http";
 
 /**
@@ -15,6 +15,21 @@ export async function GET(
     const user = await requireUser();
     const { id } = await params;
     return json(await getGameDetail(id, user.id));
+  } catch (error) {
+    return handleError(error);
+  }
+}
+
+/** Clears this game off the caller's lobby. */
+export async function DELETE(
+  _request: Request,
+  { params }: { params: Promise<{ id: string }> },
+) {
+  try {
+    const user = await requireUser();
+    const { id } = await params;
+    await hideGame(id, user);
+    return json({ ok: true });
   } catch (error) {
     return handleError(error);
   }

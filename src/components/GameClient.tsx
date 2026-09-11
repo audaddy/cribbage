@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import Link from "next/link";
 import type { GameDetail, MoveRequest } from "@/lib/api-types";
 import {
@@ -73,6 +74,7 @@ export function GameClient({ initial }: { initial: GameDetail }) {
   const [saying, setSaying] = useState<string | null>(null);
   const wasYourTurn = useRef(detail.view.isYourTurn);
 
+  const router = useRouter();
   const { view } = detail;
   const names = detail.table.map(
     (entry, seat) => entry.name ?? `Player ${seat + 1}`,
@@ -126,7 +128,15 @@ export function GameClient({ initial }: { initial: GameDetail }) {
     (next: GameDetail) => {
       const current = detailRef.current;
       // Never clobber a newer local state with a stale poll response.
-      if (next.version <= current.version) return;
+      if (next.version < current.version) return;
+
+      // Table talk deliberately does not bump the version — that is what keeps
+      // it from colliding with a move. The cost is that a poll carrying only
+      // new talk looks like no news at all, so it has to be recognised here or
+      // the other player's line is dropped on the floor and never seen.
+      const known = new Set(current.reactions.map((entry) => entry.id));
+      const newTalk = next.reactions.some((entry) => !known.has(entry.id));
+      if (next.version === current.version && !newTalk) return;
 
       // Surface what the opponent did while we were watching.
       const lastSeen = current.log.at(-1)?.seq ?? -1;
@@ -186,6 +196,27 @@ export function GameClient({ initial }: { initial: GameDetail }) {
       if (reaction) pushToast(`${opponentName}: ${reaction.text}`);
     }
   }, [detail.reactions, opponentName, pushToast, view.you]);
+
+  /** Deals the next game between the same people and goes straight to it. */
+  const rematch = useCallback(async () => {
+    setBusy(true);
+    setError(null);
+    try {
+      const response = await fetch(`/api/games/${initial.id}/rematch`, {
+        method: "POST",
+      });
+      const body = await response.json();
+      if (!response.ok) {
+        setError(body.error ?? "Could not start another game.");
+        return;
+      }
+      router.push(`/games/${body.id}`);
+    } catch {
+      setError("Could not reach the server.");
+    } finally {
+      setBusy(false);
+    }
+  }, [initial.id, router]);
 
   const say = useCallback(
     async (key: string) => {
@@ -688,11 +719,25 @@ export function GameClient({ initial }: { initial: GameDetail }) {
                     : `${names[view.winnerSeat]} took it.`}
                 </h2>
                 <p className="winner-score">
-                  {view.scores[view.winnerSeat]}–
-                  {view.scores[view.winnerSeat === 0 ? 1 : 0]}
+                  {view.scores[view.winnerTrack ?? 0]}–
+                  {Math.max(
+                    0,
+                    ...view.scores.filter((_, track) => track !== view.winnerTrack),
+                  )}
                 </p>
+                {detail.rivalry && detail.rivalry.played > 0 && (
+                  <SeriesRecord rivalry={detail.rivalry} />
+                )}
                 <div className="row-wrap" style={{ justifyContent: "center", marginTop: 10 }}>
-                  <Link className="btn btn-primary" href="/games">
+                  <button
+                    type="button"
+                    className="btn btn-primary"
+                    onClick={() => void rematch()}
+                    disabled={busy}
+                  >
+                    {busy ? "Dealing…" : "Play again"}
+                  </button>
+                  <Link className="btn" href="/games">
                     Back to your games
                   </Link>
                 </div>
@@ -702,6 +747,11 @@ export function GameClient({ initial }: { initial: GameDetail }) {
         </div>
 
         <aside className="game-side">
+          {detail.rivalry && detail.rivalry.played > 0 && !gameOver && (
+            <div className="panel panel-pad">
+              <SeriesRecord rivalry={detail.rivalry} compact />
+            </div>
+          )}
           {detail.opponent && (
             <TableTalk onSay={say} saying={saying} disabled={saying !== null} />
           )}
@@ -709,7 +759,13 @@ export function GameClient({ initial }: { initial: GameDetail }) {
             <div className="panel-head">
               <span className="panel-title">History</span>
             </div>
-            <HistoryLog log={detail.log} freshAfter={freshAfter} />
+            <HistoryLog
+              log={detail.log}
+              reactions={detail.reactions}
+              names={names}
+              tracks={names.map((_, seat) => trackOfSeat(view, seat))}
+              freshAfter={freshAfter}
+            />
           </div>
         </aside>
       </div>
@@ -763,6 +819,36 @@ function TableTalk({
                 {reaction.text}
               </button>
             ))}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+/**
+ * The running score between these people.
+ *
+ * Counted from finished games rather than a stored tally, so it is right
+ * retroactively — games played before anyone was keeping track are in it.
+ */
+function SeriesRecord({
+  rivalry,
+  compact = false,
+}: {
+  rivalry: NonNullable<GameDetail["rivalry"]>;
+  compact?: boolean;
+}) {
+  return (
+    <div className={`series${compact ? " series--compact" : ""}`}>
+      <span className="table-label">
+        {rivalry.played === 1 ? "1 game played" : `${rivalry.played} games played`}
+      </span>
+      <div className="series-rows">
+        {rivalry.standings.map((standing) => (
+          <div className="series-row" key={standing.userId}>
+            <span className="series-name">{standing.name}</span>
+            <span className="series-wins">{standing.wins}</span>
           </div>
         ))}
       </div>

@@ -309,6 +309,25 @@ async function main() {
   });
   assert(nonsense.status === 403, `only known lines are accepted (got ${nonsense.status})`);
 
+  console.log("→ talk reaches the other player without a move");
+  // The bug this guards: reactions deliberately do not bump the version, so a
+  // poll carrying only new talk must still be recognised as news. Otherwise
+  // one player sees the banter and the other never does.
+  const beforeTalk2 = await bob.json(`/api/games/${created.id}`);
+  await alice.json(`/api/games/${created.id}/react`, {
+    method: "POST",
+    body: JSON.stringify({ key: "go_easy" }),
+  });
+  const afterTalk = await bob.json(`/api/games/${created.id}`);
+  assert(
+    afterTalk.version === beforeTalk2.version,
+    "talk still does not disturb the game",
+  );
+  assert(
+    afterTalk.reactions.length > beforeTalk2.reactions.length,
+    "a poll with no move in it still carries the new line",
+  );
+
   console.log("→ a third party cannot see the game");
   const carol = new Player(`carol.${stamp}@example.test`);
   await carol.signIn();
@@ -388,6 +407,37 @@ async function main() {
     cpu.detail.view.scores[cpu.detail.view.winnerSeat] === 121,
     "the computer game ends on exactly 121",
   );
+
+  console.log("→ the running score, a rematch, and clearing a game away");
+  assert(detail.rivalry !== null, "a finished game reports the head-to-head");
+  assert(detail.rivalry.played >= 1, "this game is counted in it");
+  const winnerId = detail.rivalry.standings.find((row) => row.wins > 0);
+  assert(winnerId !== undefined, "somebody has a win to their name");
+
+  const again = await alice.json(`/api/games/${created.id}/rematch`, { method: "POST" });
+  const rematch = await alice.json(`/api/games/${again.id}`);
+  assert(rematch.view.phase === "discard", "a rematch is dealt straight away");
+  assert(rematch.table.length === 2, "with the same people already seated");
+  assert(
+    rematch.rivalry.played === detail.rivalry.played,
+    "the new game inherits the running score",
+  );
+
+  // Removing is per person: Alice clearing it must not take it from Bob.
+  const removed = await alice.fetch(`/api/games/${again.id}`, { method: "DELETE" });
+  assert(removed.ok, `a player may clear a game away (got ${removed.status})`);
+  const aliceLobby = await alice.json("/api/games");
+  assert(
+    !aliceLobby.games.some((game) => game.id === again.id),
+    "it leaves the remover's lobby",
+  );
+  const bobLobby = await bob.json("/api/games");
+  assert(
+    bobLobby.games.some((game) => game.id === again.id),
+    "and stays in everyone else's",
+  );
+  const bobStillSees = await bob.fetch(`/api/games/${again.id}`);
+  assert(bobStillSees.ok, "the other player can still play it");
 
   console.log(
     `\n✓ ${moves} moves, ${detail.log.length} log entries, ${detail.view.handNumber} hands`,

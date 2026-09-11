@@ -58,6 +58,15 @@ export interface TableSeat {
   isBot: boolean;
 }
 
+/** How the same company has fared against each other over time. */
+export interface RivalryRecord {
+  /** Finished games between exactly these people. */
+  played: number;
+  standings: { userId: string; name: string; wins: number }[];
+  /** Who took the most recent one. Both partners, in a partnership game. */
+  lastWinnerIds: string[];
+}
+
 export interface GameDetail {
   id: string;
   status: string;
@@ -77,6 +86,8 @@ export interface GameDetail {
   log: LogEntry[];
   /** Recent table talk, oldest first. */
   reactions: ReactionEntry[];
+  /** The running score between these players, once they have finished one. */
+  rivalry: RivalryRecord | null;
   inviteUrl: string | null;
 }
 

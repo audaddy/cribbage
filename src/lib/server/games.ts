@@ -35,6 +35,7 @@ import { prisma } from "./db";
 import { env } from "./env";
 import { notify } from "./notify";
 import { listReactions } from "./reactions";
+import { rivalryFor } from "./rivalry";
 
 const INVITE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"; // no I, O, 0, 1
 
@@ -159,6 +160,8 @@ export async function listGamesForUser(userId: string): Promise<GameSummary[]> {
         { player2Id: userId },
         { player3Id: userId },
       ],
+      // Games this player has cleared off their own list.
+      hiddenBy: { none: { userId } },
     },
     include: withPlayers,
     orderBy: [{ status: "asc" }, { lastMoveAt: "desc" }],
@@ -231,11 +234,13 @@ export async function getGameDetail(
 
   // Take the most recent slice, not the oldest: a long game would otherwise
   // show only its opening hands and hide everything that just happened.
-  const [events, reactions] = await Promise.all([
+  const [events, reactions, rivalry] = await Promise.all([
     prisma.gameEvent
       .findMany({ where: { gameId }, orderBy: { seq: "desc" }, take: 400 })
       .then((rows) => rows.reverse()),
     listReactions(gameId),
+    // Only worth the query once a table is full: an open invite has no history.
+    game.player1Id ? rivalryFor(game) : Promise.resolve(null),
   ]);
 
   const seated = [game.player0, game.player1, game.player2, game.player3];
@@ -278,6 +283,7 @@ export async function getGameDetail(
       };
     }),
     reactions,
+    rivalry,
     inviteUrl:
       game.status === "awaiting_opponent" && game.player0Id === userId
         ? `${env.appUrl}/join/${game.inviteCode}`
@@ -559,4 +565,116 @@ async function dispatchTurnNotification(
       summary: `It is your turn against ${actor.displayName}. The score is ${after.scores[opponentSeat]}–${after.scores[actorSeat]}.`,
     });
   }
+}
+
+/**
+ * Clears a game off one player's lobby.
+ *
+ * Hiding rather than deleting, because the other players are still in that
+ * game: one person tidying their list must not take it away from everybody
+ * else. Once every human at the table has hidden it — or when nobody else was
+ * ever there — the row and its history go for good.
+ */
+export async function hideGame(gameId: string, user: User): Promise<void> {
+  const game = await prisma.game.findUnique({
+    where: { id: gameId },
+    include: withPlayers,
+  });
+  if (!game) throw new GameAccessError("Game not found.");
+  if (seatOf(game, user.id) === null) {
+    throw new GameAccessError("You are not a player in this game.");
+  }
+
+  await prisma.gameHidden.upsert({
+    where: { gameId_userId: { gameId, userId: user.id } },
+    update: {},
+    create: { gameId, userId: user.id },
+  });
+
+  // Everyone whose opinion counts: real people still holding a seat. A game
+  // against the computer, or an invite nobody took, has nobody else to ask.
+  const humans = [game.player0, game.player1, game.player2, game.player3]
+    .slice(0, seatCount(game))
+    .filter((player): player is SeatUser => Boolean(player) && !player!.isBot)
+    .map((player) => player.id);
+
+  const hidden = await prisma.gameHidden.findMany({
+    where: { gameId },
+    select: { userId: true },
+  });
+  const hiddenIds = new Set(hidden.map((row) => row.userId));
+
+  if (humans.every((id) => hiddenIds.has(id))) {
+    // Events, reactions and hide markers all cascade from the game row.
+    await prisma.game.delete({ where: { id: gameId } });
+  }
+}
+
+/**
+ * Starts the next game between the same people.
+ *
+ * Everyone is already seated, so there is no invite to send and no waiting:
+ * the cards are dealt as the game is created. The previous game is left alone
+ * — it is what the running score is counted from.
+ */
+export async function createRematch(gameId: string, user: User): Promise<Game> {
+  const previous = await prisma.game.findUnique({
+    where: { id: gameId },
+    include: withPlayers,
+  });
+  if (!previous) throw new GameAccessError("Game not found.");
+  if (seatOf(previous, user.id) === null) {
+    throw new GameAccessError("You are not a player in this game.");
+  }
+  if (previous.status !== "complete") {
+    throw new GameAccessError("Finish this game first.");
+  }
+
+  const variant = (previous.variant as Variant) ?? "two";
+  const seats = VARIANTS[variant].seats;
+  const ids = [
+    previous.player0Id,
+    previous.player1Id,
+    previous.player2Id,
+    previous.player3Id,
+  ].slice(0, seats);
+  if (ids.some((id) => !id)) {
+    throw new GameAccessError("That game never filled up.");
+  }
+
+  const names = namesOf(previous);
+  // The loser deals the next game, as they would at a table.
+  const state = createGame(variant);
+  const { state: dealt, events } = applyAction(state, { type: "join" }, { names });
+
+  const created = await prisma.game.create({
+    data: {
+      inviteCode: newInviteCode(),
+      variant,
+      player0Id: ids[0]!,
+      player1Id: ids[1] ?? null,
+      player2Id: ids[2] ?? null,
+      player3Id: ids[3] ?? null,
+      ...projection(dealt),
+    },
+  });
+  await prisma.$transaction((tx) => writeEvents(tx, created.id, 0, events));
+
+  // Everybody else finds out there is a new game waiting on them.
+  const others = await prisma.user.findMany({
+    where: { id: { in: ids.filter((id): id is string => Boolean(id) && id !== user.id) } },
+  });
+  await Promise.all(
+    others.map((recipient) =>
+      notify({
+        game: created,
+        recipient,
+        opponent: user,
+        type: "invite_accepted",
+        summary: `${user.displayName} wants a rematch. Your move.`,
+      }).catch(() => undefined),
+    ),
+  );
+
+  return created;
 }

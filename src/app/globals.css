@@ -1916,3 +1916,93 @@ details.disclosure[open] > summary::before { content: "▾ "; }
   border-radius: 50%;
   vertical-align: middle;
 }
+
+/* Table talk in the history, set apart from the moves it sits between. */
+.log-item--talk .log-message {
+  font-style: italic;
+  color: var(--ink-soft);
+}
+
+/* --- lobby rows with a way out ------------------------------------------ */
+
+.game-row {
+  display: flex;
+  align-items: stretch;
+  gap: 6px;
+}
+
+.game-row .game-card { flex: 1; min-width: 0; }
+
+.game-remove {
+  flex: 0 0 auto;
+  width: 34px;
+  font: inherit;
+  font-size: 1.1rem;
+  line-height: 1;
+  color: var(--muted);
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 10px;
+  cursor: pointer;
+  transition:
+    color 0.16s ease,
+    background-color 0.16s ease,
+    border-color 0.16s ease;
+}
+
+.game-remove:hover:not(:disabled) {
+  color: var(--danger);
+  background: color-mix(in srgb, var(--danger) 8%, transparent);
+  border-color: color-mix(in srgb, var(--danger) 30%, var(--line));
+}
+
+.game-remove:disabled { opacity: 0.5; cursor: default; }
+
+/* What kind of table it was, when it was not the usual two. */
+.variant-tag {
+  margin-left: 7px;
+  padding: 1px 7px;
+  font-size: 0.68rem;
+  font-weight: 650;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+  background: var(--surface-3);
+  border-radius: 999px;
+  vertical-align: middle;
+}
+
+/* --- the running score between the same people -------------------------- */
+
+.series { display: flex; flex-direction: column; gap: 7px; }
+.series--compact { gap: 5px; }
+
+.series-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.series-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 3px 0;
+}
+
+.series-row + .series-row { border-top: 1px solid var(--line); }
+
+.series-name {
+  font-size: 0.88rem;
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.series-wins {
+  font-size: 1.05rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink);
+}
