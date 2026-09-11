@@ -13,6 +13,7 @@ import {
 } from "@/lib/cribbage";
 import { CribbageBoard } from "./CribbageBoard";
 import { HistoryLog } from "./HistoryLog";
+import { CastPanel } from "./CastPanel";
 import { CardBack, PlayingCard, cardName, withCardChips } from "./PlayingCard";
 import {
   Burst,
@@ -470,7 +471,12 @@ export function GameClient({ initial }: { initial: GameDetail }) {
 
       <div className="game-grid">
         <div className="stack">
-          <div className="board-shell">
+          {detail.onTv && (
+            <p className="notice notice-quiet">
+              This game is up on a television. Your hand is below.
+            </p>
+          )}
+          <div className={`board-shell${detail.onTv ? " board-shell--tv" : ""}`}>
             <CribbageBoard
               tracks={tracks}
               target={view.target}
@@ -747,6 +753,7 @@ export function GameClient({ initial }: { initial: GameDetail }) {
         </div>
 
         <aside className="game-side">
+          <CastPanel code={detail.roomCode} />
           {detail.rivalry && detail.rivalry.played > 0 && !gameOver && (
             <div className="panel panel-pad">
               <SeriesRecord rivalry={detail.rivalry} compact />

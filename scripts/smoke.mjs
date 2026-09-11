@@ -328,6 +328,26 @@ async function main() {
     "a poll with no move in it still carries the new line",
   );
 
+  console.log("→ the television shows the board and no hands");
+  // No session at all: a TV cannot sign in. That makes this response the
+  // security boundary, so it is checked against both players' actual cards.
+  const tv = await (await fetch(`${BASE}/api/tv/${created.inviteCode}`)).json();
+  assert(tv.code === created.inviteCode, "the room code identifies the table");
+  assert(tv.view.players.length === 2, "everyone at the table is listed");
+  assert(
+    tv.view.players.every((player) => player.hand === null),
+    "no hand is face up before the show",
+  );
+  const tvBlob = JSON.stringify(tv);
+  for (const player of [alice, bob]) {
+    const theirs = await player.json(`/api/games/${created.id}`);
+    for (const card of theirs.view.hand) {
+      assert(!tvBlob.includes(`"${card}"`), `${card} leaked to the television`);
+    }
+  }
+  const badRoom = await fetch(`${BASE}/api/tv/ZZZZZZZZ`);
+  assert(badRoom.status === 404, `an unknown room code is refused (got ${badRoom.status})`);
+
   console.log("→ a third party cannot see the game");
   const carol = new Player(`carol.${stamp}@example.test`);
   await carol.signIn();

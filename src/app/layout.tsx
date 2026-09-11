@@ -1,6 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import { Fraunces, Inter } from "next/font/google";
-import Link from "next/link";
+import { SiteHeader } from "@/components/SiteHeader";
 import { CardDefs } from "@/components/PlayingCard";
 import "./globals.css";
 
@@ -48,19 +48,7 @@ export default function RootLayout({
       <body>
         <div className="page-grain" aria-hidden="true" />
         <CardDefs />
-        <header className="site-header">
-          <Link href="/" className="brand">
-            <span className="brand-mark" aria-hidden="true">
-              <svg viewBox="0 0 100 100" width="18" height="18">
-                <path
-                  d="M50 8C50 8 13 37 13 58c0 13 10 21 21 21 7 0 12-3 15-8-1 10-5 17-13 22h28c-8-5-12-12-13-22 3 5 8 8 15 8 11 0 21-8 21-21C87 37 50 8 50 8Z"
-                  fill="currentColor"
-                />
-              </svg>
-            </span>
-            Cribbage
-          </Link>
-        </header>
+        <SiteHeader />
         {children}
       </body>
     </html>

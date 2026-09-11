@@ -2006,3 +2006,320 @@ details.disclosure[open] > summary::before { content: "▾ "; }
   font-variant-numeric: tabular-nums;
   color: var(--ink);
 }
+
+/* --- the television ------------------------------------------------------
+   Read from a sofa, not a desk: everything is sized against the viewport so
+   the same page suits a 55-inch screen and a mirrored laptop, and nothing here
+   ever scrolls — a TV has no scrollbar and nobody to reach it. */
+
+.tv-shell {
+  min-height: 100vh;
+  padding: clamp(14px, 2.2vh, 30px) clamp(16px, 2.4vw, 44px);
+  background:
+    radial-gradient(120% 90% at 50% 0%, #1d2530 0%, #10141b 62%, #0a0d12 100%);
+  color: var(--ink);
+}
+
+.tv {
+  display: flex;
+  flex-direction: column;
+  gap: clamp(10px, 1.6vh, 22px);
+  height: calc(100vh - clamp(28px, 4.4vh, 60px));
+  max-width: 2000px;
+  margin: 0 auto;
+}
+
+.tv-head {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: 18px;
+}
+
+.tv-hand,
+.tv-room {
+  font-size: clamp(0.8rem, 1.3vw, 1.25rem);
+  font-weight: 650;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.tv-headline {
+  margin: 0;
+  font-size: clamp(1.3rem, 2.9vw, 3rem);
+  font-weight: 700;
+  line-height: 1.1;
+  text-align: center;
+  text-wrap: balance;
+}
+
+.tv-board {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-height: 0;
+}
+
+.tv-board .scoreboard { font-size: clamp(0.9rem, 1.5vw, 1.5rem); }
+
+/* Nothing on a television may scroll, and the board is the part that would
+   push everything else off the bottom — a three-lane board is half again as
+   tall as a two. Capping its height letterboxes it instead. */
+.tv-board svg {
+  width: 100%;
+  max-height: 40vh;
+  height: auto;
+}
+
+.tv-board .board-frame { min-height: 0; }
+
+.tv-table {
+  flex: 0 1 auto;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  gap: clamp(12px, 2vw, 34px);
+  align-items: start;
+  padding: clamp(10px, 1.6vh, 22px) clamp(12px, 1.8vw, 28px);
+  background: linear-gradient(160deg, var(--felt) 0%, var(--felt-deep) 100%);
+  border: 1px solid var(--felt-edge);
+  border-radius: 16px;
+}
+
+.tv-slot { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+.tv-slot--wide { min-width: 0; }
+
+.tv-label {
+  font-size: clamp(0.68rem, 1vw, 0.95rem);
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--felt-ink-soft);
+}
+
+.tv-empty { font-size: clamp(0.8rem, 1.1vw, 1rem); color: var(--felt-ink-soft); }
+
+.tv-play,
+.tv-pile {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+}
+
+.tv-played { position: relative; display: inline-flex; }
+
+.tv-played-peg {
+  position: absolute;
+  right: -2px;
+  bottom: -2px;
+  width: 12px;
+  height: 12px;
+  border: 2px solid var(--felt-deep);
+  border-radius: 50%;
+}
+
+.tv-players {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: 1fr;
+  gap: clamp(8px, 1.2vw, 20px);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.tv-player {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  padding: clamp(8px, 1.2vh, 16px) clamp(10px, 1.2vw, 18px);
+  background: var(--surface-2);
+  border: 2px solid var(--line);
+  border-radius: 14px;
+  transition: border-color 0.3s ease, background-color 0.3s ease;
+}
+
+/* Whose move it is has to be obvious from across a room. */
+.tv-player--turn {
+  background: color-mix(in srgb, var(--good) 14%, var(--surface-2));
+  border-color: var(--good);
+}
+
+.tv-player-name {
+  font-size: clamp(0.95rem, 1.5vw, 1.6rem);
+  font-weight: 700;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tv-chip {
+  padding: 2px 9px;
+  font-size: clamp(0.6rem, 0.85vw, 0.8rem);
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
+  background: var(--surface-3);
+  border-radius: 999px;
+}
+
+.tv-cards { display: flex; flex-basis: 100%; gap: 4px; }
+
+/* --- the lobby screen, whose only job is getting people into the game --- */
+
+.tv--lobby {
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+}
+
+.tv-title {
+  margin: 0;
+  font-size: clamp(2rem, 5vw, 4.5rem);
+  letter-spacing: -0.02em;
+}
+
+.tv-join {
+  display: flex;
+  flex-wrap: wrap;
+  gap: clamp(20px, 4vw, 64px);
+  align-items: center;
+  justify-content: center;
+}
+
+.tv-join-code { display: flex; flex-direction: column; gap: 6px; }
+
+.tv-join-label,
+.tv-join-hint {
+  font-size: clamp(0.75rem, 1.1vw, 1rem);
+  font-weight: 650;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.tv-code {
+  font-size: clamp(3rem, 9vw, 8rem);
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  line-height: 1;
+  color: var(--brass-light, #e0bb6c);
+}
+
+.tv-qr {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  align-items: center;
+  padding: 14px;
+  background: #fff;
+  border-radius: 14px;
+}
+
+.tv-qr .tv-join-hint { color: #4a4740; }
+
+.tv-seats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px;
+  justify-content: center;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.tv-seats li {
+  display: flex;
+  gap: 9px;
+  align-items: center;
+  padding: 9px 18px;
+  font-size: clamp(0.9rem, 1.4vw, 1.3rem);
+  color: var(--muted);
+  background: var(--surface-2);
+  border: 1px dashed var(--line-strong);
+  border-radius: 999px;
+}
+
+.tv-seats li.taken {
+  color: var(--ink);
+  font-weight: 650;
+  border-style: solid;
+}
+
+/* Table talk, up on the big screen where it belongs. */
+.tv-talk {
+  position: fixed;
+  left: 50%;
+  bottom: clamp(16px, 3vh, 40px);
+  transform: translateX(-50%);
+  padding: clamp(10px, 1.6vh, 18px) clamp(18px, 2.4vw, 34px);
+  font-size: clamp(1.1rem, 2.2vw, 2.2rem);
+  font-weight: 650;
+  font-style: italic;
+  color: var(--ink);
+  background: var(--surface);
+  border: 3px solid var(--line);
+  border-radius: 999px;
+  box-shadow: 0 18px 50px rgb(0 0 0 / 0.5);
+  animation: tv-talk-in 0.35s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+@keyframes tv-talk-in {
+  from { opacity: 0; transform: translate(-50%, 18px) scale(0.94); }
+  to { opacity: 1; transform: translate(-50%, 0) scale(1); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tv-talk { animation: none; }
+}
+
+/* --- putting the board on a television ---------------------------------- */
+
+.cast-url {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.cast-url code {
+  flex: 1;
+  min-width: 0;
+  padding: 8px 11px;
+  overflow: hidden;
+  font-size: 0.82rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  border-radius: 9px;
+}
+
+.cast-qr {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+}
+
+.cast-qr svg { flex: 0 0 auto; border-radius: 6px; }
+
+/* A quieter notice than the error one: information, not a problem. */
+.notice-quiet {
+  padding: 9px 13px;
+  font-size: 0.85rem;
+  color: var(--muted);
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+}
+
+/* When a television is showing the board, the phone need not repeat it. */
+.board-shell--tv {
+  max-height: 132px;
+  overflow: hidden;
+  opacity: 0.5;
+  mask-image: linear-gradient(to bottom, #000 55%, transparent 100%);
+}

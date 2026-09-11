@@ -140,6 +140,9 @@ model Game {
   updatedAt   DateTime  @updatedAt
   lastMoveAt  DateTime  @default(now())
   completedAt DateTime?
+  /// Last time a television asked for this game. Lets a phone notice the board
+  /// is already up on a screen everyone can see, and get out of its own way.
+  tvSeenAt    DateTime?
 
   events        GameEvent[]
   notifications Notification[]

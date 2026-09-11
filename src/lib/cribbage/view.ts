@@ -242,10 +242,165 @@ export { seatsOnTrack };
  * the time it is written.
  */
 export function redactEvent(event: GameEvent, viewer: Seat): GameEvent {
-  if (event.type === "discard" && event.seat !== viewer) {
+  return redact(event, (seat) => seat === viewer);
+}
+
+/**
+ * The same strip for a television, which is nobody: a discard's cards are
+ * secret from every pair of eyes in the room, including the ones on the couch.
+ */
+export function redactForSpectator(event: GameEvent): GameEvent {
+  return redact(event, () => false);
+}
+
+function redact(event: GameEvent, owns: (seat: Seat | null) => boolean): GameEvent {
+  if (event.type === "discard" && !owns(event.seat)) {
     const { detail, ...rest } = event;
     void detail;
     return rest;
   }
   return event;
+}
+
+/**
+ * What a television may show.
+ *
+ * A TV cannot sign in, so this projection is served to anyone holding the room
+ * code — which makes it a security boundary in its own right rather than a
+ * convenience. It is built from the public facts only: nobody's hand is in
+ * here at any point, only how many cards each player holds, and a hand appears
+ * solely once its owner has turned it face up to count it. There is no seat to
+ * be "you", so there is nothing for a projection bug to leak toward.
+ */
+export interface SpectatorSeat {
+  seat: Seat;
+  name: string;
+  track: number;
+  cardCount: number;
+  /** Their hand, only once the show has turned it face up for everyone. */
+  hand: Card[] | null;
+  hasDiscarded: boolean;
+  saidGo: boolean;
+  isTurn: boolean;
+}
+
+export interface SpectatorView {
+  phase: GameState["phase"];
+  variant: Variant;
+  seats: number;
+  handNumber: number;
+  target: number;
+  dealer: Seat;
+  scores: number[];
+  prevScores: number[];
+  discardsOwed: number;
+  players: SpectatorSeat[];
+  /** One entry per scoring track: who is on it, and where they stand. */
+  tracks: { track: number; names: string[]; score: number; prevScore: number }[];
+  crib: Card[] | null;
+  cribSize: number;
+  starter: Card | null;
+  play: {
+    turn: Seat;
+    total: number;
+    sequence: PlayedCard[];
+    history: PlayedCard[];
+  };
+  countIndex: number;
+  countLabel: string | null;
+  counter: Seat | null;
+  pending: Seat[];
+  winnerSeat: Seat | null;
+  winnerTrack: number | null;
+  /** What the room is waiting for, written for a screen across the room. */
+  headline: string;
+}
+
+function spectatorHeadline(state: GameState, names: string[]): string {
+  const spec = specOf(state);
+  switch (state.phase) {
+    case "awaiting_opponent": {
+      const empty = state.seats - names.filter(Boolean).length;
+      return empty === 1 ? "Waiting for one more player" : `Waiting for ${empty} players`;
+    }
+    case "discard": {
+      const owing = pendingSeats(state).map((seat) => names[seat] ?? `Seat ${seat + 1}`);
+      const owed = spec.discards === 1 ? "a card" : "two cards";
+      return owing.length === 0
+        ? "Cutting the starter"
+        : `${owing.join(" and ")} still to discard ${owed}`;
+    }
+    case "pegging":
+      return `${names[state.play.turn] ?? "Someone"} to play — the count is ${state.play.total}`;
+    case "counting": {
+      const seat = counterSeat(state);
+      return countingCrib(state)
+        ? `${names[seat] ?? "The dealer"} counts the crib`
+        : `${names[seat] ?? "Someone"} counts their hand`;
+    }
+    case "complete": {
+      if (state.winnerSeat === null) return "Game over";
+      const winners = seatsOnTrack(state, trackOf(state, state.winnerSeat))
+        .map((seat) => names[seat] ?? `Seat ${seat + 1}`)
+        .join(" & ");
+      return `${winners} wins`;
+    }
+    default:
+      return "Cribbage";
+  }
+}
+
+export function spectatorView(state: GameState, names: string[] = []): SpectatorView {
+  const spec = specOf(state);
+  const pending = pendingSeats(state);
+  const nameFor = (seat: Seat) => names[seat] ?? `Player ${seat + 1}`;
+
+  const players: SpectatorSeat[] = Array.from({ length: state.seats }, (_, seat) => ({
+    seat,
+    name: nameFor(seat),
+    track: trackOf(state, seat),
+    cardCount:
+      state.phase === "pegging"
+        ? (state.pegRemaining[seat]?.length ?? 0)
+        : (state.hands[seat]?.length ?? 0),
+    hand: handVisible(state, seat) ? [...(state.hands[seat] ?? [])] : null,
+    hasDiscarded: state.discarded[seat] ?? false,
+    saidGo: state.play.goSaid[seat] ?? false,
+    isTurn: pending.includes(seat),
+  }));
+
+  return {
+    phase: state.phase,
+    variant: state.variant,
+    seats: state.seats,
+    handNumber: state.handNumber,
+    target: state.target,
+    dealer: state.dealer,
+    scores: [...state.scores],
+    prevScores: [...state.prevScores],
+    discardsOwed: spec.discards,
+    players,
+    tracks: state.scores.map((score, track) => ({
+      track,
+      names: seatsOnTrack(state, track).map(nameFor),
+      score,
+      prevScore: state.prevScores[track] ?? score,
+    })),
+    crib: cribVisible(state) ? [...state.crib] : null,
+    cribSize: state.crib.length,
+    starter: state.starter,
+    play: {
+      turn: state.play.turn,
+      total: state.play.total,
+      sequence: state.play.sequence.map((p) => ({ ...p })),
+      history: state.play.history.map((p) => ({ ...p })),
+    },
+    countIndex: state.countIndex,
+    countLabel: currentCountLabel(state, names),
+    counter: state.phase === "counting" ? counterSeat(state) : null,
+    pending,
+    winnerSeat: state.winnerSeat,
+    winnerTrack: state.winnerSeat === null ? null : trackOf(state, state.winnerSeat),
+    headline: spectatorHeadline(state, names),
+  };
 }

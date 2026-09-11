@@ -5,7 +5,7 @@
  * without dragging Prisma into the bundle.
  */
 
-import type { GameEvent, PlayerView, Seat, Variant } from "./cribbage";
+import type { GameEvent, PlayerView, Seat, SpectatorView, Variant } from "./cribbage";
 
 export interface GameSummary {
   id: string;
@@ -67,6 +67,18 @@ export interface RivalryRecord {
   lastWinnerIds: string[];
 }
 
+/** Everything a television is allowed to know about a game. */
+export interface TableView {
+  /** The room code, shown on screen for players to join with. */
+  code: string;
+  version: number;
+  joinUrl: string;
+  seatsOpen: number;
+  view: SpectatorView;
+  log: LogEntry[];
+  reactions: ReactionEntry[];
+}
+
 export interface GameDetail {
   id: string;
   status: string;
@@ -88,6 +100,10 @@ export interface GameDetail {
   reactions: ReactionEntry[];
   /** The running score between these players, once they have finished one. */
   rivalry: RivalryRecord | null;
+  /** The room code, for putting this game up on a television. */
+  roomCode: string;
+  /** True when a television has asked for this game in the last minute or so. */
+  onTv: boolean;
   inviteUrl: string | null;
 }
 

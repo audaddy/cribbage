@@ -36,6 +36,7 @@ import { env } from "./env";
 import { notify } from "./notify";
 import { listReactions } from "./reactions";
 import { rivalryFor } from "./rivalry";
+import { TV_ACTIVE_MS } from "./table";
 
 const INVITE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"; // no I, O, 0, 1
 
@@ -284,6 +285,10 @@ export async function getGameDetail(
     }),
     reactions,
     rivalry,
+    roomCode: game.inviteCode,
+    onTv:
+      game.tvSeenAt !== null &&
+      Date.now() - game.tvSeenAt.getTime() < TV_ACTIVE_MS,
     inviteUrl:
       game.status === "awaiting_opponent" && game.player0Id === userId
         ? `${env.appUrl}/join/${game.inviteCode}`
