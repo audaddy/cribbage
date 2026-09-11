@@ -86,17 +86,15 @@ function px(value: number): string {
  * A short spray of sparks in the scoring player's colour, thrown from the
  * board when points land.
  */
-export function Burst({ seat, points }: { seat: 0 | 1; points: number }) {
+export function Burst({ seat, points }: { seat: number; points: number }) {
   const reduced = usePrefersReducedMotion();
   const isClient = useIsClient();
   if (reduced || !isClient) return null;
 
   // More points, more sparks — a go is a flicker, a 24-hand is a shower.
   const count = Math.min(6 + points * 2, 28);
-  const colors =
-    seat === 0
-      ? ["var(--p0)", "var(--p0-light)", "var(--brass-light)"]
-      : ["var(--p1)", "var(--p1-light)", "var(--brass-light)"];
+  // `seat` is a scoring track, so the sparks match whichever peg just moved.
+  const colors = [`var(--p${seat})`, `var(--p${seat}-light)`, "var(--brass-light)"];
 
   return (
     <span className="burst" aria-hidden="true">
@@ -124,14 +122,21 @@ export function Burst({ seat, points }: { seat: 0 | 1; points: number }) {
 }
 
 /** Falling confetti for a finished game. */
-export function Confetti({ seat }: { seat: 0 | 1 }) {
+export function Confetti({ seat }: { seat: number }) {
   const reduced = usePrefersReducedMotion();
   const isClient = useIsClient();
   if (reduced || !isClient) return null;
 
+  // Literal colours: confetti is drawn on a canvas that cannot read tokens.
+  const TRACK_COLORS = [
+    ["#c0402a", "#e8785f"],
+    ["#2a6ea8", "#6aa8dc"],
+    ["#9a7310", "#d6a832"],
+  ];
+  const [base, light] = TRACK_COLORS[seat % TRACK_COLORS.length]!;
   const colors = [
-    seat === 0 ? "#c0402a" : "#2a6ea8",
-    seat === 0 ? "#e8785f" : "#6aa8dc",
+    base,
+    light,
     "#c08b3e",
     "#e3bd76",
     "#2e6f5c",

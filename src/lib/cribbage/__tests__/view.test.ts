@@ -18,11 +18,11 @@ function leaked(view: unknown): string {
 describe("player view", () => {
   it("shows you your own hand and nothing of the opponent's", () => {
     const state = dealt();
-    const view = playerView(state, 0, "Bob");
+    const view = playerView(state, 0, ["Alice", "Bob"]);
 
     expect(view.hand).toEqual(state.hands[0]);
-    expect(view.opponentHand).toBeNull();
-    expect(view.opponentCardCount).toBe(6);
+    expect(view.opponents[0]!.hand).toBeNull();
+    expect(view.opponents[0]!.cardCount).toBe(6);
 
     for (const card of state.hands[1]) {
       expect(leaked(view)).not.toContain(`"${card}"`);
@@ -31,7 +31,7 @@ describe("player view", () => {
 
   it("never ships the undealt deck", () => {
     const state = dealt();
-    const view = playerView(state, 1, "Alice");
+    const view = playerView(state, 1, ["Alice", "Bob"]);
     const undealt = state.deck.filter(
       (card) => !state.hands[0].includes(card) && !state.hands[1].includes(card),
     );
@@ -56,7 +56,7 @@ describe("player view", () => {
 
     // Even the crib's owner cannot see the opponent's contribution early.
     for (const seat of [0, 1] as Seat[]) {
-      const view = playerView(state, seat, "x");
+      const view = playerView(state, seat, ["Alice", "Bob"]);
       expect(view.crib).toBeNull();
       expect(view.cribSize).toBe(4);
     }
@@ -78,21 +78,21 @@ describe("player view", () => {
     };
 
     // countIndex 0: the non-dealer is showing, so their hand is public.
-    const atZero = playerView({ ...base, countIndex: 0 }, dealer, "x");
-    expect(atZero.opponentHand).toEqual(base.hands[nonDealer]);
+    const atZero = playerView({ ...base, countIndex: 0 }, dealer, ["Alice", "Bob"]);
+    expect(atZero.opponents[0]!.hand).toEqual(base.hands[nonDealer]);
     expect(atZero.crib).toBeNull();
 
     // The non-dealer still cannot see the dealer's hand yet.
-    const fromNonDealer = playerView({ ...base, countIndex: 0 }, nonDealer, "x");
-    expect(fromNonDealer.opponentHand).toBeNull();
+    const fromNonDealer = playerView({ ...base, countIndex: 0 }, nonDealer, ["Alice", "Bob"]);
+    expect(fromNonDealer.opponents[0]!.hand).toBeNull();
 
     // countIndex 1: the dealer is showing.
     expect(
-      playerView({ ...base, countIndex: 1 }, nonDealer, "x").opponentHand,
+      playerView({ ...base, countIndex: 1 }, nonDealer, ["Alice", "Bob"]).opponents[0]!.hand,
     ).toEqual(base.hands[dealer]);
 
     // countIndex 2: the crib is turned up for both.
-    expect(playerView({ ...base, countIndex: 2 }, nonDealer, "x").crib).toEqual(
+    expect(playerView({ ...base, countIndex: 2 }, nonDealer, ["Alice", "Bob"]).crib).toEqual(
       base.crib,
     );
   });
@@ -104,8 +104,8 @@ describe("player view", () => {
       winnerSeat: 0,
       crib: ["AS", "AH", "AD", "AC"],
     };
-    const view = playerView(state, 1, "Alice");
-    expect(view.opponentHand).toEqual(state.hands[0]);
+    const view = playerView(state, 1, ["Alice", "Bob"]);
+    expect(view.opponents[0]!.hand).toEqual(state.hands[0]);
     expect(view.crib).toEqual(state.crib);
   });
 
@@ -132,23 +132,23 @@ describe("player view", () => {
       },
     };
 
-    expect(playerView(state, 0, "x").legalPlays).toEqual(["3S"]);
+    expect(playerView(state, 0, ["Alice", "Bob"]).legalPlays).toEqual(["3S"]);
     // Not your turn means no legal plays are offered at all.
-    expect(playerView(state, 1, "x").legalPlays).toEqual([]);
+    expect(playerView(state, 1, ["Alice", "Bob"]).legalPlays).toEqual([]);
   });
 
   it("writes a prompt that says whose move it is", () => {
     const state = dealt();
-    expect(playerView(state, 0, "Bob").prompt).toMatch(/discard/i);
-    expect(playerView(state, 0, "Bob").isYourTurn).toBe(true);
+    expect(playerView(state, 0, ["Alice", "Bob"]).prompt).toMatch(/discard/i);
+    expect(playerView(state, 0, ["Alice", "Bob"]).isYourTurn).toBe(true);
 
     const pegging: GameState = {
       ...state,
       phase: "pegging",
       play: { ...state.play, turn: 1, total: 12 },
     };
-    expect(playerView(pegging, 0, "Bob").prompt).toBe("Waiting for Bob…");
-    expect(playerView(pegging, 1, "Alice").prompt).toContain("count is 12");
+    expect(playerView(pegging, 0, ["Alice", "Bob"]).prompt).toBe("Waiting for Bob…");
+    expect(playerView(pegging, 1, ["Alice", "Bob"]).prompt).toContain("count is 12");
   });
 });
 

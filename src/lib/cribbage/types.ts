@@ -1,18 +1,32 @@
 import type { Card } from "./cards";
 
-/** Seat index. Seat 0 is the game's creator; seat 1 is the invited player. */
-export type Seat = 0 | 1;
+/**
+ * Seat index, counting clockwise from the game's creator at seat 0.
+ *
+ * Two-handed games use seats 0–1, three-handed 0–2, partnership games 0–3 with
+ * partners sitting opposite: 0 with 2, and 1 with 3.
+ */
+export type Seat = number;
+
+/**
+ * How many people are at the table, and whether they play as partnerships.
+ *
+ * These three are the only supported shapes because they are the only ones
+ * with settled rules: heads-up, the three-handed game with its own card dealt
+ * to the crib, and four in two partnerships.
+ */
+export type Variant = "two" | "three" | "teams";
 
 export type Phase =
-  /** Game created, waiting for the second player to accept the invite. */
+  /** Game created, waiting for the table to fill. */
   | "awaiting_opponent"
-  /** Six cards dealt to each player; both must discard two to the crib. */
+  /** Cards dealt; everyone owes the crib. */
   | "discard"
-  /** Starter cut; players alternate laying cards up to 31. */
+  /** Starter cut; play passes round the table up to 31. */
   | "pegging"
-  /** The show: non-dealer hand, then dealer hand, then crib. */
+  /** The show: left of the dealer first, round to the dealer, then the crib. */
   | "counting"
-  /** Someone reached 121. */
+  /** Someone reached the target. */
   | "complete";
 
 /** One line of a scoring breakdown, e.g. "Fifteen two" worth 2. */
@@ -44,34 +58,51 @@ export interface PlayState {
   /** Every card played this deal, in order. */
   history: PlayedCard[];
   /** Whether each seat has already declared "go" in this sequence. */
-  goSaid: [boolean, boolean];
+  goSaid: boolean[];
   /** Last seat to lay a card in this sequence, for go / last-card points. */
   lastPlayer: Seat | null;
 }
 
 export interface GameState {
-  /** Schema version of this payload, for forward migrations. */
-  schema: 1;
+  /**
+   * Schema version of this payload.
+   *
+   * 1 was heads-up only, with two-element tuples and no `variant`. Those states
+   * are still valid: `normalizeState` fills in what they predate, so a game in
+   * progress survives the upgrade untouched.
+   */
+  schema: 1 | 2;
+  variant: Variant;
+  /** Seats at the table: 2, 3, or 4. Derived from `variant`. */
+  seats: number;
   phase: Phase;
-  /** Seat currently holding the deal. The non-dealer always leads the play. */
+  /** Seat holding the deal. The seat to the dealer's left always leads. */
   dealer: Seat;
-  scores: [number, number];
+  /**
+   * Scores, one per scoring track. Everyone keeps their own score except in a
+   * partnership game, where the two partners share one — see `trackOf`.
+   */
+  scores: number[];
   /** Scores before the most recent award, so the board can draw a back peg. */
-  prevScores: [number, number];
+  prevScores: number[];
   /** Undealt remainder of the deck; the starter is cut from here. */
   deck: Card[];
-  /** The six dealt cards before discarding, then the four kept cards. */
-  hands: [Card[], Card[]];
+  /** Dealt cards before discarding, then the four kept cards. */
+  hands: Card[][];
   /** Kept cards not yet laid during the play. */
-  pegRemaining: [Card[], Card[]];
+  pegRemaining: Card[][];
   crib: Card[];
   starter: Card | null;
-  /** True once that seat has committed its two crib cards. */
-  discarded: [boolean, boolean];
+  /** True once that seat has committed its crib card(s). */
+  discarded: boolean[];
   play: PlayState;
-  /** 0 = non-dealer hand, 1 = dealer hand, 2 = crib. */
+  /**
+   * Position in the show: 0 is the seat left of the dealer, counting round to
+   * the dealer at `seats - 1`, and `seats` is the crib.
+   */
   countIndex: number;
   handNumber: number;
+  /** Winning seat. In a partnership game, one of the two winning partners. */
   winnerSeat: Seat | null;
   /** Target score; standard game is 121. */
   target: number;
@@ -111,7 +142,7 @@ export interface GameEvent {
  */
 export type Action =
   | { type: "join" }
-  | { type: "discard"; seat: Seat; cards: [Card, Card] }
+  | { type: "discard"; seat: Seat; cards: Card[] }
   | { type: "play"; seat: Seat; card: Card }
   | { type: "count"; seat: Seat };
 

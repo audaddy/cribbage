@@ -28,17 +28,20 @@ export async function POST(
     switch (body.type) {
       case "discard": {
         const cards = body.cards;
+        // How many cards the crib is owed depends on the variant, so the
+        // engine is left to judge the count; this only screens out nonsense.
         if (
           !Array.isArray(cards) ||
-          cards.length !== 2 ||
+          cards.length < 1 ||
+          cards.length > 2 ||
           !cards.every((card) => isValidCard(card))
         ) {
-          return fail("Select exactly two cards to discard.");
+          return fail("Select the cards to discard.");
         }
         const result = await submitAction(
           id,
           user,
-          { type: "discard", cards: cards as [string, string] },
+          { type: "discard", cards: cards as string[] },
           version,
         );
         return json(result.detail);

@@ -19,7 +19,7 @@ function naiveAction(state: GameState, seat: Seat) {
 }
 
 /** Plays one full game; seat 0 is the computer, seat 1 is naive. */
-function playGame(seed: number): { winner: Seat; scores: [number, number] } {
+function playGame(seed: number): { winner: Seat; scores: number[] } {
   const rng = seededRng(seed);
   let state = applyAction(createGame(), { type: "join" }, { names, rng }).state;
 

@@ -6,7 +6,6 @@ import type { GameDetail, MoveRequest } from "@/lib/api-types";
 import {
   type Card,
   type PlayedCard as PlayedCardState,
-  type Seat,
   cardLabel,
   reactionFor,
   reactionsWithTone,
@@ -41,7 +40,8 @@ export function GameClient({ initial }: { initial: GameDetail }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [toasts, setToasts] = useState<Toast[]>([]);
-  const [bump, setBump] = useState<{ seat: Seat; delta: number; key: number } | null>(
+  // `seat` here is a scoring track: in a partnership game two people share one.
+  const [bump, setBump] = useState<{ seat: number; delta: number; key: number } | null>(
     null,
   );
   /** True for the moment after a deal, while cards fly in from the deck. */
@@ -74,11 +74,37 @@ export function GameClient({ initial }: { initial: GameDetail }) {
   const wasYourTurn = useRef(detail.view.isYourTurn);
 
   const { view } = detail;
-  const names: [string, string] =
-    view.you === 0
-      ? [detail.you.name, detail.opponent?.name ?? "Opponent"]
-      : [detail.opponent?.name ?? "Opponent", detail.you.name];
-  const opponentName = detail.opponent?.name ?? "an opponent yet to join";
+  const names = detail.table.map(
+    (entry, seat) => entry.name ?? `Player ${seat + 1}`,
+  );
+  // With three or four at the table there is no single "opponent", so the
+  // heading names everyone rather than pretending there is one of them.
+  const seatedOthers = detail.table.filter(
+    (entry) => entry.seat !== view.you && entry.name,
+  );
+  const opponentName =
+    seatedOthers.length === 0
+      ? "an opponent yet to join"
+      : seatedOthers.length === 1
+        ? seatedOthers[0]!.name!
+        : seatedOthers.map((entry) => entry.name).join(", ");
+
+  /** Chairs still waiting on somebody. */
+  const seatsToFill = detail.table.filter((entry) => !entry.name).length;
+
+  /** One peg per scoring track: per player, or per partnership. */
+  const tracks = view.scores.map((score, track) => {
+    const members = detail.table.filter(
+      (entry) => entry.name && trackOfSeat(view, entry.seat) === track,
+    );
+    return {
+      name: members.map((entry) => entry.name).join(" & ") || `Side ${track + 1}`,
+      score,
+      prevScore: view.prevScores[track] ?? score,
+      yours: track === view.yourTrack,
+      won: view.winnerTrack === track,
+    };
+  });
 
   useEffect(() => {
     detailRef.current = detail;
@@ -228,13 +254,13 @@ export function GameClient({ initial }: { initial: GameDetail }) {
   useEffect(() => {
     const before = scoresRef.current;
     const after = view.scores;
-    if (before[0] !== after[0] || before[1] !== after[1]) {
-      const seat: Seat = after[0] > before[0] ? 0 : 1;
-      const delta = after[seat] - before[seat];
+    const moved = after.findIndex((score, track) => score !== (before[track] ?? 0));
+    if (moved !== -1) {
+      const delta = after[moved]! - (before[moved] ?? 0);
       scoresRef.current = after;
       if (delta > 0) {
         const key = Date.now();
-        setBump({ seat, delta, key });
+        setBump({ seat: moved, delta, key });
         const timer = window.setTimeout(() => setBump(null), BUMP_MS);
         return () => window.clearTimeout(timer);
       }
@@ -314,7 +340,12 @@ export function GameClient({ initial }: { initial: GameDetail }) {
     setSelected((current) => {
       if (current.includes(card)) return current.filter((c) => c !== card);
       if (view.phase === "discard") {
-        return current.length >= 2 ? [current[1]!, card] : [...current, card];
+        // Three- and four-handed games owe the crib a single card, so a second
+        // tap replaces the first rather than adding to it.
+        const owed = view.discardsOwed;
+        return current.length >= owed
+          ? [...current.slice(current.length - owed + 1), card]
+          : [...current, card];
       }
       return [card];
     });
@@ -394,10 +425,13 @@ export function GameClient({ initial }: { initial: GameDetail }) {
 
       {detail.inviteUrl && (
         <div className="panel panel-pad stack-sm invite-panel">
-          <h2>Invite your opponent</h2>
+          <h2>
+            {seatsToFill === 1 ? "Invite your opponent" : `Invite ${seatsToFill} players`}
+          </h2>
           <p className="small muted">
-            Text them this link. They tap it, pick a name, and the first hand
-            is dealt — no account, no app.
+            {seatsToFill === 1
+              ? "Text them this link. They tap it, pick a name, and the first hand is dealt — no account, no app."
+              : `Send the same link to everyone. Each one taps it and picks a name; the cards are dealt once all ${detail.table.length} seats are taken.`}
           </p>
           <InviteLink url={detail.inviteUrl} />
         </div>
@@ -407,12 +441,8 @@ export function GameClient({ initial }: { initial: GameDetail }) {
         <div className="stack">
           <div className="board-shell">
             <CribbageBoard
-              names={names}
-              scores={view.scores}
-              prevScores={view.prevScores}
-              you={view.you}
+              tracks={tracks}
               target={view.target}
-              winnerSeat={view.winnerSeat}
               bumped={bump?.seat ?? null}
             />
             {bump && <Burst key={`burst-${bump.key}`} seat={bump.seat} points={bump.delta} />}
@@ -420,7 +450,7 @@ export function GameClient({ initial }: { initial: GameDetail }) {
               <span
                 key={bump.key}
                 className="score-float"
-                style={{ color: bump.seat === 0 ? "var(--p0-light)" : "var(--p1-light)" }}
+                style={{ color: `var(--p${bump.seat}-light)` }}
                 aria-hidden="true"
               >
                 +{bump.delta}
@@ -475,7 +505,8 @@ export function GameClient({ initial }: { initial: GameDetail }) {
               <div className="row" style={{ gap: 10 }}>
                 <span className="table-label">The play</span>
                 {view.phase === "pegging" &&
-                  ([0, 1] as Seat[])
+                  names
+                    .map((_, seat) => seat)
                     .filter((seat) => view.play.goSaid[seat])
                     .map((seat) => (
                       <span key={seat} className="go-chip">
@@ -518,27 +549,36 @@ export function GameClient({ initial }: { initial: GameDetail }) {
                 </div>
               </div>
 
-              <div className="stack-sm">
-                <span className="table-label">{names[view.you === 0 ? 1 : 0]}</span>
-                <div className="card-strip card-strip--tight card-held">
-                  {view.opponentHand
-                    ? view.opponentHand.map((card, i) => (
-                        <span key={card} style={heldTilt(i, view.opponentHand!.length)}>
-                          <PlayingCard card={card} size="sm" />
-                        </span>
-                      ))
-                    : Array.from({ length: view.opponentCardCount }, (_, i) => (
-                        <span key={i} style={heldTilt(i, view.opponentCardCount)}>
-                          <CardBack size="sm" />
-                        </span>
-                      ))}
-                  {view.opponentCardCount === 0 && !view.opponentHand && (
-                    <span className="small" style={{ opacity: 0.55 }}>
-                      no cards
-                    </span>
-                  )}
+              {view.opponents.map((other) => (
+                <div className="stack-sm" key={other.seat}>
+                  <span className="table-label">
+                    <span
+                      className="peg-dot peg-dot--inline"
+                      style={{ background: `var(--p${other.track})` }}
+                    />
+                    {other.name}
+                    {other.isPartner ? " (partner)" : ""}
+                  </span>
+                  <div className="card-strip card-strip--tight card-held">
+                    {other.hand
+                      ? other.hand.map((card, i) => (
+                          <span key={card} style={heldTilt(i, other.hand!.length)}>
+                            <PlayingCard card={card} size="sm" />
+                          </span>
+                        ))
+                      : Array.from({ length: other.cardCount }, (_, i) => (
+                          <span key={i} style={heldTilt(i, other.cardCount)}>
+                            <CardBack size="sm" />
+                          </span>
+                        ))}
+                    {other.cardCount === 0 && !other.hand && (
+                      <span className="small" style={{ opacity: 0.55 }}>
+                        no cards
+                      </span>
+                    )}
+                  </div>
                 </div>
-              </div>
+              ))}
             </div>
           </section>
 
@@ -547,7 +587,7 @@ export function GameClient({ initial }: { initial: GameDetail }) {
               <span className="panel-title">{handLabel}</span>
               {isDiscard && (
                 <span className="small muted">
-                  {selected.length}/2 selected for the crib
+                  {selected.length}/{view.discardsOwed} selected for the crib
                 </span>
               )}
             </div>
@@ -613,8 +653,9 @@ export function GameClient({ initial }: { initial: GameDetail }) {
               isCounting={isCounting}
               countLabel={view.countLabel}
               selected={selected}
+              discardsOwed={view.discardsOwed}
               onDiscard={() => {
-                const cards = [selected[0]!, selected[1]!] as [Card, Card];
+                const cards = selected.slice(0, view.discardsOwed);
                 setCribFlight({
                   from: view.cribSize,
                   cards: cards
@@ -634,10 +675,12 @@ export function GameClient({ initial }: { initial: GameDetail }) {
 
           {gameOver && view.winnerSeat !== null && (
             <>
-              {view.winnerSeat === view.you && <Confetti seat={view.you} />}
+              {view.winnerTrack === view.yourTrack && (
+                <Confetti seat={view.yourTrack} />
+              )}
               <div className="panel winner-card stack-sm">
                 <span className="table-label">
-                  {marginLabel(view.scores, view.winnerSeat)}
+                  {marginLabel(view.scores, view.winnerTrack ?? 0)}
                 </span>
                 <h2 className="winner-title">
                   {view.winnerSeat === view.you
@@ -725,6 +768,15 @@ function TableTalk({
       </div>
     </div>
   );
+}
+
+/**
+ * Which peg a seat pushes. The view names the viewer's own track and each
+ * opponent's, which between them covers the table.
+ */
+function trackOfSeat(view: GameDetail["view"], seat: number): number {
+  if (seat === view.you) return view.yourTrack;
+  return view.opponents.find((other) => other.seat === seat)?.track ?? seat;
 }
 
 /** A face-down card in the crib, flown from wherever it left the hand. */
@@ -879,11 +931,17 @@ function CountChip({ total }: { total: number }) {
   );
 }
 
-/** Cribbage names the margin: under 91 is a skunk, under 61 a double skunk. */
-function marginLabel(scores: [number, number], winner: Seat): string {
-  const loser = scores[winner === 0 ? 1 : 0];
-  if (loser < 61) return "Double skunk";
-  if (loser < 91) return "Skunk";
+/**
+ * Cribbage names the margin: under 91 is a skunk, under 61 a double skunk.
+ * With three at the table the margin is measured against whoever came closest.
+ */
+function marginLabel(scores: number[], winnerTrack: number): string {
+  const best = Math.max(
+    0,
+    ...scores.filter((_, track) => track !== winnerTrack),
+  );
+  if (best < 61) return "Double skunk";
+  if (best < 91) return "Skunk";
   return "Game";
 }
 
@@ -897,7 +955,7 @@ function PlayArea({
   flight,
 }: {
   view: GameDetail["view"];
-  names: [string, string];
+  names: string[];
   flight: CardFlight | null;
 }) {
   const history = view.play.history;
@@ -940,6 +998,7 @@ function ActionBar({
   isCounting,
   countLabel,
   selected,
+  discardsOwed,
   onDiscard,
   onPlay,
   onCount,
@@ -950,6 +1009,7 @@ function ActionBar({
   isCounting: boolean;
   countLabel: string | null;
   selected: Card[];
+  discardsOwed: number;
   onDiscard: () => void;
   onPlay: () => void;
   onCount: () => void;
@@ -961,13 +1021,15 @@ function ActionBar({
       <button
         type="button"
         className="btn btn-primary btn-block"
-        disabled={busy || selected.length !== 2}
+        disabled={busy || selected.length !== discardsOwed}
         onClick={onDiscard}
       >
         {busy && spinner}
-        {selected.length === 2
+        {selected.length === discardsOwed
           ? `Lay away ${selected.map((c) => cardLabel(c)).join(" and ")}`
-          : "Select two cards for the crib"}
+          : discardsOwed === 1
+            ? "Select a card for the crib"
+            : "Select two cards for the crib"}
       </button>
     );
   }

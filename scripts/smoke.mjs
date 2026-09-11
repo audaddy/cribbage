@@ -78,7 +78,7 @@ function assert(condition, message) {
 function chooseMove(view) {
   switch (view.phase) {
     case "discard":
-      return { type: "discard", cards: [view.hand[4], view.hand[5]] };
+      return { type: "discard", cards: view.hand.slice(0, view.discardsOwed) };
     case "pegging":
       assert(view.legalPlays.length > 0, "a player to act always has a legal play");
       return { type: "play", card: view.legalPlays[0] };
@@ -91,7 +91,7 @@ function chooseMove(view) {
 
 /** The opponent's cards must never appear in a player's payload. */
 function assertNoLeak(detail, opponentHand) {
-  if (!opponentHand || detail.view.opponentHand) return; // legitimately revealed
+  if (!opponentHand) return;
   const blob = JSON.stringify(detail.view);
   for (const card of opponentHand) {
     // A card the opponent has already played is public; only unplayed ones leak.
@@ -137,6 +137,87 @@ async function playTheComputer(player, spectator) {
       assert(detail.version > before, "each nudge advances the computer exactly once");
     }
   }
+  return { detail, moves };
+}
+
+/**
+ * Plays a whole game with more than two at the table.
+ *
+ * The interesting parts are structural rather than tactical: the table only
+ * deals once every chair is taken, everyone owes the crib one card, the play
+ * and the show go round rather than back and forth, and — in a partnership
+ * game — two people push the same peg.
+ */
+async function playRoundTable(variant, players) {
+  const host = players[0];
+  const created = await host.json("/api/games", {
+    method: "POST",
+    body: JSON.stringify({ variant }),
+  });
+
+  let detail = await host.json(`/api/games/${created.id}`);
+  assert(detail.variant === variant, `the game is ${variant}`);
+  assert(detail.view.phase === "awaiting_opponent", "an empty table waits");
+
+  // Seats fill one at a time, and nothing is dealt until the last one lands.
+  for (let index = 1; index < players.length; index += 1) {
+    const joined = await players[index].json("/api/games/join", {
+      method: "POST",
+      body: JSON.stringify({ code: created.inviteCode }),
+    });
+    assert(joined.id === created.id, "everyone lands in the same game");
+    detail = await host.json(`/api/games/${created.id}`);
+    const full = index === players.length - 1;
+    assert(
+      (detail.view.phase !== "awaiting_opponent") === full,
+      `cards are dealt only once all ${players.length} chairs are taken`,
+    );
+  }
+
+  assert(detail.table.length === players.length, "every chair is reported");
+  assert(detail.view.hand.length === (variant === "two" ? 6 : 5), "deal size");
+  assert(
+    detail.view.opponents.length === players.length - 1,
+    "everyone else is visible as an opponent",
+  );
+  if (variant === "teams") {
+    const partners = detail.view.opponents.filter((other) => other.isPartner);
+    assert(partners.length === 1, "a partnership game gives you one partner");
+    assert(detail.view.scores.length === 2, "partners share a peg");
+  }
+  if (variant === "three") {
+    assert(detail.view.scores.length === 3, "three players keep three scores");
+    assert(detail.view.cribSize === 1, "the crib starts with a card off the deck");
+  }
+
+  let moves = 0;
+  while (detail.view.phase !== "complete") {
+    if (moves++ > 6000) throw new Error(`${variant} game did not finish`);
+    const seat = detail.view.pending[0];
+    assert(seat !== undefined, "somebody must always be able to act");
+    const actor = players[seat];
+    const mine = await actor.json(`/api/games/${created.id}`);
+
+    // Nobody may see a hand that has not been shown.
+    for (const other of mine.view.opponents) {
+      if (other.hand === null) {
+        const theirs = await players[other.seat].json(`/api/games/${created.id}`);
+        assertNoLeak(mine, theirs.view.hand);
+      }
+    }
+
+    detail = await actor.json(`/api/games/${created.id}/move`, {
+      method: "POST",
+      body: JSON.stringify({
+        ...chooseMove(mine.view),
+        version: mine.version,
+      }),
+    });
+  }
+
+  const track = detail.view.winnerTrack;
+  assert(track !== null, "a winner is recorded");
+  assert(detail.view.scores[track] === 121, "the winner is on exactly 121");
   return { detail, moves };
 }
 
@@ -289,6 +370,16 @@ async function main() {
   const finalLobby = await bob.json("/api/games");
   assert(finalLobby.games[0].status === "complete", "the lobby marks the game complete");
   assert(finalLobby.games[0].isYourTurn === false, "a finished game is nobody's turn");
+
+  console.log("→ three at the table");
+  const dave = new Player(`dave.${stamp}@example.test`);
+  await dave.signIn();
+  const three = await playRoundTable("three", [alice, bob, carol]);
+  console.log(`  ${three.moves} moves`);
+
+  console.log("→ four in partnerships");
+  const teams = await playRoundTable("teams", [alice, bob, carol, dave]);
+  console.log(`  ${teams.moves} moves`);
 
   console.log("→ playing the computer");
   const cpu = await playTheComputer(alice, carol);

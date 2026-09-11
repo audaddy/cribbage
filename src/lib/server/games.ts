@@ -19,11 +19,16 @@ import {
   IllegalMoveError,
   type Seat,
   TARGET_SCORE,
+  VARIANTS,
+  type Variant,
   applyAction,
   createGame,
+  normalizeState,
   pendingSeats,
   playerView,
   redactEvent,
+  trackCount,
+  trackOf,
 } from "@/lib/cribbage";
 import type { GameDetail, GameSummary } from "@/lib/api-types";
 import { prisma } from "./db";
@@ -58,16 +63,34 @@ function newInviteCode(): string {
 }
 
 function parseState(game: Game): GameState {
-  return JSON.parse(game.state) as GameState;
+  return normalizeState(JSON.parse(game.state) as GameState);
 }
 
 function maskOf(state: GameState): number {
   return pendingSeats(state).reduce<number>((mask, seat) => mask | (1 << seat), 0);
 }
 
+/** Seat columns in seating order, so a seat is an index into this list. */
+function seatIds(game: Game): (string | null)[] {
+  return [game.player0Id, game.player1Id, game.player2Id, game.player3Id];
+}
+
 export function seatOf(game: Game, userId: string): Seat | null {
-  if (game.player0Id === userId) return 0;
-  if (game.player1Id === userId) return 1;
+  const seat = seatIds(game).indexOf(userId);
+  return seat === -1 ? null : seat;
+}
+
+/** How many seats this game's variant asks for. */
+export function seatCount(game: Pick<Game, "variant">): number {
+  return VARIANTS[game.variant as Variant]?.seats ?? 2;
+}
+
+/** The lowest seat nobody holds, or null when the table is full. */
+function firstFreeSeat(game: Game): Seat | null {
+  const ids = seatIds(game);
+  for (let seat = 1; seat < seatCount(game); seat += 1) {
+    if (!ids[seat]) return seat;
+  }
   return null;
 }
 
@@ -89,52 +112,98 @@ function projection(state: GameState) {
           : "active",
     pendingMask: maskOf(state),
     dealerSeat: state.dealer,
-    score0: state.scores[0],
-    score1: state.scores[1],
+    score0: state.scores[0] ?? 0,
+    score1: state.scores[1] ?? 0,
+    score2: state.scores[2] ?? 0,
     handNumber: state.handNumber,
     winnerSeat: state.winnerSeat,
     state: JSON.stringify(state),
   };
 }
 
+type SeatUser = Pick<User, "id" | "displayName" | "isBot">;
+
 type GameWithPlayers = Game & {
-  player0: Pick<User, "id" | "displayName">;
-  player1: Pick<User, "id" | "displayName"> | null;
+  player0: SeatUser;
+  player1: SeatUser | null;
+  player2: SeatUser | null;
+  player3: SeatUser | null;
 };
 
+const seatSelect = { select: { id: true, displayName: true, isBot: true } } as const;
+
 const withPlayers = {
-  player0: { select: { id: true, displayName: true, isBot: true } },
-  player1: { select: { id: true, displayName: true, isBot: true } },
+  player0: seatSelect,
+  player1: seatSelect,
+  player2: seatSelect,
+  player3: seatSelect,
 } as const;
 
-function namesOf(game: GameWithPlayers): [string, string] {
-  return [game.player0.displayName, game.player1?.displayName ?? "Opponent"];
+/** Display names by seat, with placeholders for seats nobody holds yet. */
+function namesOf(game: GameWithPlayers): string[] {
+  const seated = [game.player0, game.player1, game.player2, game.player3];
+  return Array.from(
+    { length: seatCount(game) },
+    (_, seat) => seated[seat]?.displayName ?? `Player ${seat + 1}`,
+  );
 }
 
 // --- reads -----------------------------------------------------------------
 
 export async function listGamesForUser(userId: string): Promise<GameSummary[]> {
   const games = await prisma.game.findMany({
-    where: { OR: [{ player0Id: userId }, { player1Id: userId }] },
+    where: {
+      OR: [
+        { player0Id: userId },
+        { player1Id: userId },
+        { player2Id: userId },
+        { player3Id: userId },
+      ],
+    },
     include: withPlayers,
     orderBy: [{ status: "asc" }, { lastMoveAt: "desc" }],
   });
 
   return games.map((game) => {
     const seat = seatOf(game, userId)!;
-    const opponent = seat === 0 ? game.player1 : game.player0;
+    const variant = (game.variant as Variant) ?? "two";
+    const names = namesOf(game);
+    const seated = [game.player0, game.player1, game.player2, game.player3];
+    const track = trackOf({ variant }, seat);
+    const scores = [game.score0, game.score1, game.score2];
+    // Everyone at the table but you, which is one name heads-up and a list
+    // otherwise. Partners are named too — you want to know who you are with.
+    const others = names
+      .map((name, other) => ({ name, other }))
+      .filter(({ other }) => other !== seat && seated[other])
+      .map(({ name }) => name);
+    const bestOther = Math.max(
+      0,
+      ...scores
+        .map((score, index) => ({ score, index }))
+        .filter(({ index }) => index !== track && index < trackCount({ variant }))
+        .map(({ score }) => score),
+    );
     return {
       id: game.id,
       status: game.status,
       phase: game.phase,
+      variant,
+      seats: VARIANTS[variant].seats,
       handNumber: game.handNumber,
       yourSeat: seat,
-      yourScore: seat === 0 ? game.score0 : game.score1,
-      opponentScore: seat === 0 ? game.score1 : game.score0,
-      opponentName: opponent?.displayName ?? null,
+      yourScore: scores[track] ?? 0,
+      opponentScore: bestOther,
+      opponentName: others.length > 0 ? others.join(", ") : null,
+      /** Seats still waiting on somebody to take them. */
+      seatsOpen:
+        VARIANTS[variant].seats - seated.filter((player, index) => player && index < VARIANTS[variant].seats).length,
       isYourTurn: (game.pendingMask & (1 << seat)) !== 0,
       winnerSeat: game.winnerSeat,
-      youWon: game.winnerSeat === null ? null : game.winnerSeat === seat,
+      youWon:
+        game.winnerSeat === null
+          ? null
+          : trackOf({ variant }, game.winnerSeat) === track,
       target: TARGET_SCORE,
       // Only the creator needs the invite code, and only while it is open.
       inviteCode:
@@ -159,7 +228,6 @@ export async function getGameDetail(
   const seat = requireSeat(game, userId);
   const state = parseState(game);
   const names = namesOf(game);
-  const opponentName = names[seat === 0 ? 1 : 0];
 
   // Take the most recent slice, not the oldest: a long game would otherwise
   // show only its opening hands and hide everything that just happened.
@@ -170,14 +238,25 @@ export async function getGameDetail(
     listReactions(gameId),
   ]);
 
+  const seated = [game.player0, game.player1, game.player2, game.player3];
+  const table = Array.from({ length: seatCount(game) }, (_, index) => ({
+    seat: index,
+    name: seated[index]?.displayName ?? null,
+    isBot: seated[index]?.isBot ?? false,
+  }));
+  const others = table.filter((entry) => entry.seat !== seat && entry.name);
+
   return {
     id: game.id,
     status: game.status,
     version: game.version,
-    you: { seat, name: names[seat] },
-    opponent: game.player1 ? { name: opponentName } : null,
-    opponentIsBot: (seat === 0 ? game.player1?.isBot : game.player0.isBot) ?? false,
-    view: playerView(state, seat, opponentName),
+    variant: (game.variant as Variant) ?? "two",
+    you: { seat, name: names[seat]! },
+    table,
+    opponent: others.length === 1 ? { name: others[0]!.name! } : null,
+    // Only meaningful heads-up: the client paces a lone computer opponent.
+    opponentIsBot: others.length === 1 && others[0]!.isBot,
+    view: playerView(state, seat, names),
     log: events.map((event) => {
       const parsed: GameEvent = {
         type: event.type as GameEvent["type"],
@@ -212,6 +291,9 @@ export interface InviteSummary {
   gameId: string;
   hostName: string;
   isFull: boolean;
+  variant: Variant;
+  seats: number;
+  seatsOpen: number;
   status: string;
   /** Seat the viewer already holds in this game, if any. */
   yourSeat: Seat | null;
@@ -231,23 +313,34 @@ export async function getInviteSummary(
   });
   if (!game) return null;
 
+  const variant = (game.variant as Variant) ?? "two";
   return {
     gameId: game.id,
     hostName: game.player0.displayName,
-    isFull: game.player1Id !== null,
+    isFull: firstFreeSeat(game) === null,
+    variant,
+    seats: VARIANTS[variant].seats,
+    /** Chairs still open, including the one this visitor would take. */
+    seatsOpen: [game.player1Id, game.player2Id, game.player3Id]
+      .slice(0, VARIANTS[variant].seats - 1)
+      .filter((id) => !id).length,
     status: game.status,
     yourSeat: userId ? seatOf(game, userId) : null,
   };
 }
 
-export async function createGameForUser(user: User): Promise<Game> {
-  const state = createGame();
+export async function createGameForUser(
+  user: User,
+  variant: Variant = "two",
+): Promise<Game> {
+  const state = createGame(variant);
   for (let attempt = 0; attempt < 5; attempt++) {
     try {
       return await prisma.game.create({
         data: {
           inviteCode: newInviteCode(),
           player0Id: user.id,
+          variant,
           ...projection(state),
         },
       });
@@ -270,37 +363,60 @@ export async function acceptInvite(inviteCode: string, user: User): Promise<Game
   });
   if (!game) throw new GameAccessError("That invite link is not valid.");
   if (seatOf(game, user.id) !== null) return game;
-  if (game.player1Id) throw new GameAccessError("This game already has two players.");
 
-  const names: [string, string] = [game.player0.displayName, user.displayName];
-  const { state, events } = applyAction(parseState(game), { type: "join" }, { names });
+  const seat = firstFreeSeat(game);
+  if (seat === null) throw new GameAccessError("This game is already full.");
+
+  const total = seatCount(game);
+  const names = namesOf(game);
+  names[seat] = user.displayName;
+
+  // The cards are only dealt once every chair is taken. Until then the join
+  // just claims a seat, so a four-handed game can fill up over an afternoon.
+  const last = seat === total - 1;
+  const { state, events } = last
+    ? applyAction(parseState(game), { type: "join" }, { names })
+    : { state: parseState(game), events: [] as GameEvent[] };
+
+  const column = (["player0Id", "player1Id", "player2Id", "player3Id"] as const)[seat]!;
 
   const updated = await prisma.$transaction(async (tx) => {
     const claimed = await tx.game.updateMany({
-      where: { id: game.id, player1Id: null, version: game.version },
+      // The seat must still be empty: two people opening the same link at once
+      // must not land in the same chair.
+      where: { id: game.id, [column]: null, version: game.version },
       data: {
-        player1Id: user.id,
+        [column]: user.id,
         version: game.version + 1,
         lastMoveAt: new Date(),
         ...projection(state),
       },
     });
-    if (claimed.count !== 1) throw new GameConflictError("Someone else joined first.");
+    if (claimed.count !== 1) throw new GameConflictError("Someone else took that seat.");
 
-    await writeEvents(tx, game.id, 0, events);
+    if (events.length > 0) await writeEvents(tx, game.id, 0, events);
     return tx.game.findUniqueOrThrow({ where: { id: game.id }, include: withPlayers });
   });
 
-  const creator = await prisma.user.findUnique({ where: { id: game.player0Id } });
-  if (creator) {
-    await notify({
-      game: updated,
-      recipient: creator,
-      opponent: user,
-      type: "invite_accepted",
-      summary: `${user.displayName} accepted your invite. The game is on.`,
-    }).catch(() => undefined);
-  }
+  // Everyone already at the table hears that somebody sat down.
+  const seatedIds = [game.player0Id, game.player1Id, game.player2Id, game.player3Id]
+    .slice(0, total)
+    .filter((id): id is string => Boolean(id) && id !== user.id);
+  const seated = await prisma.user.findMany({ where: { id: { in: seatedIds } } });
+  const summary = last
+    ? `${user.displayName} joined. The game is on.`
+    : `${user.displayName} joined. Waiting on ${total - seatedIds.length - 1} more.`;
+  await Promise.all(
+    seated.map((recipient) =>
+      notify({
+        game: updated,
+        recipient,
+        opponent: user,
+        type: "invite_accepted",
+        summary,
+      }).catch(() => undefined),
+    ),
+  );
 
   return updated;
 }
@@ -337,7 +453,8 @@ export interface MoveResult {
  * derived from the session so a request can never move for the opponent.
  */
 export type ClientAction =
-  | { type: "discard"; cards: [Card, Card] }
+  // One card in the three- and four-handed games, two heads-up.
+  | { type: "discard"; cards: Card[] }
   | { type: "play"; card: Card }
   | { type: "count" };
 

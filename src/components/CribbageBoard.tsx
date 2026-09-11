@@ -1,7 +1,6 @@
 "use client";
 
 import { useLayoutEffect, useRef } from "react";
-import type { Seat } from "@/lib/cribbage";
 import { usePrefersReducedMotion } from "./motion";
 
 /**
@@ -34,13 +33,26 @@ const TURN_R = 16;
 const PEG_START_X = X_START - 20;
 const GAME_X = PEG_START_X;
 
-const LANES: { out: number; back: number }[] = [
-  { out: 40, back: 40 + TURN_R * 2 },
-  { out: 118, back: 118 + TURN_R * 2 },
-];
+/** Vertical pitch between one peg's pair of rows and the next. */
+const LANE_PITCH = 78;
+const LANE_TOP = 40;
+
+/**
+ * One lane per scoring track. Heads-up and partnership games draw two; the
+ * three-handed game draws three, and the board grows a street taller for it.
+ */
+function lanesFor(tracks: number): { out: number; back: number }[] {
+  return Array.from({ length: tracks }, (_, index) => {
+    const out = LANE_TOP + index * LANE_PITCH;
+    return { out, back: out + TURN_R * 2 };
+  });
+}
 
 const VB_W = Math.round(X_END + TURN_R + 20);
-const VB_H = 184;
+
+function boardHeight(tracks: number): number {
+  return LANE_TOP + (tracks - 1) * LANE_PITCH + 66;
+}
 const SKUNK = 91;
 const GAME_HOLE = 121;
 
@@ -150,30 +162,39 @@ function Peg({
   );
 }
 
-interface CribbageBoardProps {
-  names: [string, string];
-  scores: [number, number];
-  prevScores: [number, number];
-  you: Seat;
-  target: number;
-  winnerSeat: Seat | null;
-  /** Seat whose score just changed, for the score-number pop. */
-  bumped?: Seat | null;
+/** One peg's worth of the board: a side, not necessarily a person. */
+export interface BoardTrack {
+  /** Whose peg this is: a player, or a partnership. */
+  name: string;
+  score: number;
+  prevScore: number;
+  /** True for the viewer's own side. */
+  yours: boolean;
+  won: boolean;
 }
 
-export function CribbageBoard({
-  names,
-  scores,
-  prevScores,
-  you,
-  target,
-  winnerSeat,
-  bumped,
-}: CribbageBoardProps) {
-  const seats: Seat[] = [0, 1];
-  const pegColor = (seat: Seat) => (seat === 0 ? "var(--p0)" : "var(--p1)");
-  const pegHighlight = (seat: Seat) =>
-    seat === 0 ? "var(--p0-light)" : "var(--p1-light)";
+interface CribbageBoardProps {
+  tracks: BoardTrack[];
+  target: number;
+  /** Track whose score just changed, for the score-number pop. */
+  bumped?: number | null;
+}
+
+export function pegColor(track: number): string {
+  return `var(--p${track})`;
+}
+
+export function pegHighlight(track: number): string {
+  return `var(--p${track}-light)`;
+}
+
+export function CribbageBoard({ tracks, target, bumped }: CribbageBoardProps) {
+  const LANES = lanesFor(tracks.length);
+  const VB_H = boardHeight(tracks.length);
+  const seats = tracks.map((_, index) => index);
+  const scores = tracks.map((track) => track.score);
+  const prevScores = tracks.map((track) => track.prevScore);
+  const names = tracks.map((track) => track.name);
 
   return (
     <div className="stack-sm">
@@ -183,7 +204,7 @@ export function CribbageBoard({
             <span className="peg-dot" style={{ background: pegColor(seat) }} />
             <span className="score-name">
               {names[seat]}
-              {seat === you ? " (you)" : ""}
+              {tracks[seat]!.yours ? " (you)" : ""}
             </span>
             <span
               className={`score-value${bumped === seat ? " score-value--bump" : ""}`}
@@ -192,9 +213,9 @@ export function CribbageBoard({
               {scores[seat]}
             </span>
             <span className="tiny muted">
-              {winnerSeat === seat
+              {tracks[seat]!.won
                 ? "won"
-                : `${Math.max(target - scores[seat], 0)} to go`}
+                : `${Math.max(target - scores[seat]!, 0)} to go`}
             </span>
           </div>
         ))}
@@ -204,7 +225,9 @@ export function CribbageBoard({
         <svg
           viewBox={`0 0 ${VB_W} ${VB_H}`}
           role="img"
-          aria-label={`Board: ${names[0]} on ${scores[0]}, ${names[1]} on ${scores[1]}, playing to ${target}.`}
+          aria-label={`Board: ${tracks
+            .map((track) => `${track.name} on ${track.score}`)
+            .join(", ")}, playing to ${target}.`}
         >
           <defs>
             <radialGradient id="screwHead" cx="0.34" cy="0.3" r="0.85">
@@ -238,7 +261,18 @@ export function CribbageBoard({
 
           {/* Centre inlay, broken around an engraved wordmark. */}
           {(() => {
-            const y = (LANES[0]!.back + LANES[1]!.out) / 2;
+            // The inlay runs in the channel between two lanes, so it has to
+            // land in a gap rather than at the board's arithmetic centre —
+            // with three pegs that centre falls straight through the middle
+            // lane's holes. Of the gaps available, take the one nearest the
+            // middle.
+            const middle = (LANES[0]!.out + LANES[LANES.length - 1]!.back) / 2;
+            const gaps = LANES.slice(0, -1).map(
+              (lane, index) => (lane.back + LANES[index + 1]!.out) / 2,
+            );
+            const y = gaps.reduce((best, candidate) =>
+              Math.abs(candidate - middle) < Math.abs(best - middle) ? candidate : best,
+            );
             const gap = 54;
             const mid = VB_W / 2;
             return (
@@ -428,7 +462,7 @@ export function CribbageBoard({
                     className="peg peg--back"
                     style={{
                       offsetPath: `path("${path}")`,
-                      offsetDistance: `${distanceFor(prevScores[seat])}px`,
+                      offsetDistance: `${distanceFor(prevScores[seat]!)}px`,
                     }}
                   >
                     <circle
@@ -444,7 +478,7 @@ export function CribbageBoard({
                 {/* Front peg: the current score. */}
                 <Peg
                   path={path}
-                  distance={distanceFor(scores[seat])}
+                  distance={distanceFor(scores[seat]!)}
                   color={pegColor(seat)}
                   highlight={pegHighlight(seat)}
                 />
@@ -471,7 +505,7 @@ export function CribbageBoard({
           })}
           <text
             x={GAME_X}
-            y={LANES[1]!.back + 17}
+            y={LANES[LANES.length - 1]!.back + 17}
             textAnchor="middle"
             fontSize="8"
             fontWeight="700"
@@ -481,8 +515,8 @@ export function CribbageBoard({
             121
           </text>
           <text
-            x={holePoint(SKUNK, LANES[1]!)[0]}
-            y={LANES[1]!.back + 17}
+            x={holePoint(SKUNK, LANES[LANES.length - 1]!)[0]}
+            y={LANES[LANES.length - 1]!.back + 17}
             textAnchor="middle"
             fontSize="7.5"
             fill="rgb(255 255 255 / 0.42)"

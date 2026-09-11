@@ -67,11 +67,27 @@ export default async function JoinPage({
   if (invite.isFull) {
     return (
       <Problem title="This game is full">
-        {invite.hostName} is already playing someone else. Ask them to start a
-        new game if you want a table of your own.
+        Every seat at {invite.hostName}&rsquo;s table is taken. Ask them to
+        start a new game if you want a table of your own.
       </Problem>
     );
   }
+
+  // What sort of table the visitor is being asked to sit at.
+  const blurb =
+    invite.variant === "two"
+      ? "Two-handed cribbage, one move at a time. Take a turn, close the tab, come back whenever — the board waits for you."
+      : invite.variant === "three"
+        ? `Three-handed cribbage, everyone for themselves. ${
+            invite.seatsOpen > 1
+              ? `${invite.seatsOpen} seats still open — the cards are dealt once the table fills.`
+              : "You are the last seat — the cards are dealt as soon as you sit down."
+          }`
+        : `Cribbage in partnerships, four at the table. ${
+            invite.seatsOpen > 1
+              ? `${invite.seatsOpen} seats still open — the cards are dealt once the table fills.`
+              : "You are the last seat — the cards are dealt as soon as you sit down."
+          }`;
 
   return (
     <main className="shell shell--narrow stack">
@@ -79,8 +95,7 @@ export default async function JoinPage({
         <span className="table-label">You have been invited</span>
         <h1>{invite.hostName} wants to play cribbage.</h1>
         <p className="small" style={{ opacity: 0.84 }}>
-          Two-handed cribbage, one move at a time. Take a turn, close the tab,
-          come back whenever — the board waits for you.
+          {blurb}
         </p>
       </section>
 

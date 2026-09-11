@@ -45,6 +45,10 @@
   --p0-light: #e8785f;
   --p1: #2a6ea8;
   --p1-light: #6aa8dc;
+  /* Third seat, for the three-handed game. Amber sits clear of both the red
+     and the blue at a glance, including for the commonest colour blindness. */
+  --p2: #9a7310;
+  --p2-light: #d6a832;
 
   --good: #2c7a52;
   --warn: #a5611a;
@@ -100,6 +104,8 @@
     --p0-light: #f3a08b;
     --p1: #4f92d0;
     --p1-light: #8fc0ea;
+    --p2: #c39a2c;
+    --p2-light: #e8c765;
 
     --good: #4f9c72;
     --warn: #cd8b3e;
@@ -894,6 +900,8 @@ input {
 
 .log-seat--p0 { background: var(--p0); }
 .log-seat--p1 { background: var(--p1); }
+.log-seat--p2 { background: var(--p2); }
+.log-seat--p3 { background: var(--p3, var(--p0)); }
 
 .log-points {
   margin-left: auto;
@@ -1847,4 +1855,64 @@ details.disclosure[open] > summary::before { content: "▾ "; }
 @media (prefers-reduced-motion: reduce) {
   .talk-chip,
   .talk-chip[aria-busy="true"] { transition: none; animation: none; }
+}
+
+/* --- picking the table --------------------------------------------------
+   Three cards, not a dropdown: the choice is fixed for the life of the game,
+   so it deserves to be visible rather than hidden behind a control. */
+
+.variant-picker {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  margin-bottom: 4px;
+}
+
+@media (max-width: 520px) {
+  .variant-picker { grid-template-columns: 1fr; }
+}
+
+.variant-option {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  align-items: flex-start;
+  padding: 10px 13px;
+  font: inherit;
+  text-align: left;
+  color: var(--ink-soft);
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  border-radius: 11px;
+  cursor: pointer;
+  transition:
+    border-color 0.16s ease,
+    background-color 0.16s ease,
+    transform 0.12s ease;
+}
+
+.variant-option:hover:not(:disabled) {
+  border-color: var(--line-strong);
+  transform: translateY(-1px);
+}
+
+.variant-option[aria-checked="true"] {
+  color: var(--ink);
+  background: color-mix(in srgb, var(--good) 9%, var(--surface-2));
+  border-color: color-mix(in srgb, var(--good) 45%, var(--line));
+}
+
+.variant-option:disabled { opacity: 0.55; cursor: default; }
+
+.variant-name { font-size: 0.88rem; font-weight: 650; }
+.variant-hint { font-size: 0.74rem; color: var(--muted); }
+
+/* A seat's colour, inline beside their name at the table. */
+.peg-dot--inline {
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  margin-right: 6px;
+  border-radius: 50%;
+  vertical-align: middle;
 }

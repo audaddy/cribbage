@@ -4,10 +4,28 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { TurnAlerts } from "./TurnAlerts";
 
+/**
+ * The three tables you can sit at. Three-handed deals a card straight to the
+ * crib to make up the difference; partnership play puts partners opposite each
+ * other, sharing one peg.
+ */
+const VARIANT_CHOICES = [
+  { value: "two" as const, name: "Two players", hint: "The usual game" },
+  { value: "three" as const, name: "Three players", hint: "Every player alone" },
+  { value: "teams" as const, name: "Four, in teams", hint: "Partners opposite" },
+];
+
+const NEW_GAME_LABEL: Record<"two" | "three" | "teams", string> = {
+  two: "New game",
+  three: "New 3-player game",
+  teams: "New team game",
+};
+
 /** New-game and join-by-code controls, plus sign out. */
 export function LobbyActions({ isGuest = false }: { isGuest?: boolean }) {
   const router = useRouter();
   const [busy, setBusy] = useState<null | "new" | "cpu" | "join" | "out">(null);
+  const [variant, setVariant] = useState<"two" | "three" | "teams">("two");
   const [code, setCode] = useState("");
   const [showJoin, setShowJoin] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -19,7 +37,13 @@ export function LobbyActions({ isGuest = false }: { isGuest?: boolean }) {
     try {
       const response = await fetch(
         kind === "cpu" ? "/api/games/cpu" : "/api/games",
-        { method: "POST" },
+        kind === "cpu"
+          ? { method: "POST" }
+          : {
+              method: "POST",
+              headers: { "content-type": "application/json" },
+              body: JSON.stringify({ variant }),
+            },
       );
       const body = await response.json();
       if (!response.ok) {
@@ -76,6 +100,23 @@ export function LobbyActions({ isGuest = false }: { isGuest?: boolean }) {
 
   return (
     <div className="stack-sm">
+      <div className="variant-picker" role="radiogroup" aria-label="Game type">
+        {VARIANT_CHOICES.map((choice) => (
+          <button
+            key={choice.value}
+            type="button"
+            role="radio"
+            aria-checked={variant === choice.value}
+            className="variant-option"
+            onClick={() => setVariant(choice.value)}
+            disabled={busy !== null}
+          >
+            <span className="variant-name">{choice.name}</span>
+            <span className="variant-hint">{choice.hint}</span>
+          </button>
+        ))}
+      </div>
+
       <div className="row-wrap">
         <button
           type="button"
@@ -83,7 +124,7 @@ export function LobbyActions({ isGuest = false }: { isGuest?: boolean }) {
           onClick={() => void start("new")}
           disabled={busy !== null}
         >
-          {busy === "new" ? "Starting…" : "New game"}
+          {busy === "new" ? "Starting…" : NEW_GAME_LABEL[variant]}
         </button>
         <button
           type="button"
