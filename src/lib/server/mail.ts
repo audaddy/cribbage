@@ -40,7 +40,15 @@ export async function sendEmail(message: OutboundEmail): Promise<boolean> {
       signal: AbortSignal.timeout(8000),
     });
     if (!response.ok) {
-      console.error(`[mail] provider returned ${response.status}`);
+      // Providers explain refusals in the body, and those explanations are the
+      // whole diagnosis: an unverified sender, a sandbox address that may only
+      // write to the account owner, a revoked key. A bare status code sends you
+      // looking in the wrong place.
+      const detail = await response.text().catch(() => "");
+      console.error(
+        `[mail] provider returned ${response.status} for ${config.from} → ${message.to}` +
+          (detail ? `: ${detail.slice(0, 400)}` : ""),
+      );
       return false;
     }
     return true;

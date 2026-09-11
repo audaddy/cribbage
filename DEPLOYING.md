@@ -81,7 +81,52 @@ Emails) or set the right one for this repository:
 git config user.email you@example.com
 ```
 
-## 4. Play
+## 4. Email (optional, but it is what makes async play work)
+
+Without a mail provider the app still works — invite links seat a guest with no
+address at all — but sign-in links go to the server log instead of an inbox, and
+nobody gets told it is their turn. Resend's free tier sends 3,000 messages a
+month and takes about ten minutes.
+
+1. Sign up at <https://resend.com> and create an API key (**API Keys → Create**).
+   Copy it once; Resend will not show it again.
+
+2. Decide who you can send to. This is the part that catches people out:
+
+   - **No domain of your own.** Use the shared sender
+     `Cribbage <onboarding@resend.dev>`. Resend will only deliver it to the
+     address that owns the account — your own. That is enough for your sign-in
+     links and your turn notifications; anyone you invite plays as a guest from
+     the invite link and needs no email.
+   - **A domain you control.** Add it under **Domains**, publish the DNS records
+     Resend gives you, and then any address at that domain can write to anyone.
+     This is what you need before a second player can sign in by email.
+
+3. Add three variables to the Vercel project (**Settings → Environment
+   Variables**), each for Production:
+
+   | Name                  | Value                                  |
+   | --------------------- | -------------------------------------- |
+   | `EMAIL_WEBHOOK_URL`   | `https://api.resend.com/emails`        |
+   | `EMAIL_WEBHOOK_TOKEN` | the API key, starting `re_`            |
+   | `EMAIL_FROM`          | `Cribbage <onboarding@resend.dev>`     |
+
+   Mark the key **Sensitive** so it cannot be read back out.
+
+4. Redeploy, then prove it end to end: open `/login` on the live site, ask for a
+   sign-in link, and check your inbox.
+
+   To test the credentials before deploying, put the same three values in
+   `.env.local` and run:
+
+   ```bash
+   npm run mail:test -- you@example.com
+   ```
+
+   That prints the provider's own answer, which is the useful one — a refused
+   sender or a sandbox restriction says so in the response body.
+
+## 5. Play
 
 1. Open your site and press **Start playing without an account**. You are in
    immediately, with a name you can change from the lobby.
@@ -95,28 +140,6 @@ git config user.email you@example.com
 3. Text it to whoever you want to play.
 
 They tap the link, type a name, and they are in. No account, no email, no app.
-
----
-
-## Optional: email
-
-Nobody needs email to play — not your opponents, and not you. It buys two
-things: signing back in on a different device, and turn notifications.
-
-1. Sign up at <https://resend.com> and create an API key.
-2. Add to Vercel:
-
-   ```
-   EMAIL_WEBHOOK_URL   https://api.resend.com/emails
-   EMAIL_WEBHOOK_TOKEN re_your_key_here
-   EMAIL_FROM          Cribbage <onboarding@resend.dev>
-   ```
-
-`onboarding@resend.dev` works without a verified domain, which is enough for a
-couple of players. To email anyone else, verify a domain in Resend first.
-
-Once email is on, "it's your turn" emails start working too — the hook is
-already written and deduplicated so it never fires twice for the same turn.
 
 ---
 
