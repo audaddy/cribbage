@@ -88,6 +88,14 @@ address at all — but sign-in links go to the server log instead of an inbox, a
 nobody gets told it is their turn. Resend's free tier sends 3,000 messages a
 month and takes about ten minutes.
 
+The quickest route is Vercel's own marketplace: on the project, open
+**Integrations → Browse Marketplace → Resend** and install it. Vercel creates
+the Resend account, injects `RESEND_API_KEY` into the project, and this app
+reads that variable directly — there is nothing to copy and nothing else to
+set. Skip to step 2 to decide who you can write to, then redeploy.
+
+To wire it up by hand instead:
+
 1. Sign up at <https://resend.com> and create an API key (**API Keys → Create**).
    Copy it once; Resend will not show it again.
 
@@ -103,7 +111,8 @@ month and takes about ten minutes.
      This is what you need before a second player can sign in by email.
 
 3. Add three variables to the Vercel project (**Settings → Environment
-   Variables**), each for Production:
+   Variables**), each for Production — unnecessary if you installed the
+   marketplace integration above:
 
    | Name                  | Value                                  |
    | --------------------- | -------------------------------------- |

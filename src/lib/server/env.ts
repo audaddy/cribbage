@@ -14,6 +14,14 @@ function number(name: string, fallback: number): number {
 const isProduction = process.env.NODE_ENV === "production";
 
 /**
+ * Resend's shared sender. It needs no DNS setup, but delivers only to the
+ * address that owns the Resend account — enough for your own sign-in links,
+ * not enough to write to a second player. Set `EMAIL_FROM` to an address at a
+ * domain you have verified to reach anyone.
+ */
+const DEFAULT_SENDER = "Cribbage <onboarding@resend.dev>";
+
+/**
  * Secret used to sign session cookies and hash magic-link tokens. A missing
  * secret is fatal in production; development falls back to a fixed string so
  * `npm run dev` works with no setup.
@@ -63,13 +71,29 @@ export const env = {
   get echoMagicLink() {
     return !isProduction && optional("DEV_ECHO_MAGIC_LINK") !== "false";
   },
+  /**
+   * Outbound mail, configured either way round.
+   *
+   * `EMAIL_WEBHOOK_URL` points at any provider that accepts a JSON POST and
+   * always wins. Failing that, `RESEND_API_KEY` alone is enough: that is the
+   * variable Vercel's Resend integration injects when you install it, so a
+   * one-click install needs no further configuration here.
+   */
   get email() {
     const url = optional("EMAIL_WEBHOOK_URL");
-    return url
+    if (url) {
+      return {
+        url,
+        token: optional("EMAIL_WEBHOOK_TOKEN") ?? optional("RESEND_API_KEY"),
+        from: optional("EMAIL_FROM") ?? DEFAULT_SENDER,
+      };
+    }
+    const resend = optional("RESEND_API_KEY");
+    return resend
       ? {
-          url,
-          token: optional("EMAIL_WEBHOOK_TOKEN"),
-          from: optional("EMAIL_FROM") ?? "Cribbage <cribbage@example.com>",
+          url: "https://api.resend.com/emails",
+          token: resend,
+          from: optional("EMAIL_FROM") ?? DEFAULT_SENDER,
         }
       : null;
   },

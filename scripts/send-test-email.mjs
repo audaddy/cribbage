@@ -34,14 +34,20 @@ if (!to || !to.includes("@")) {
   process.exit(1);
 }
 
-const url = process.env.EMAIL_WEBHOOK_URL;
-const token = process.env.EMAIL_WEBHOOK_TOKEN;
+// Mirrors env.ts: an explicit webhook wins, and RESEND_API_KEY alone is enough
+// because that is what Vercel's Resend integration injects.
+const resendKey = process.env.RESEND_API_KEY;
+const url =
+  process.env.EMAIL_WEBHOOK_URL ??
+  (resendKey ? "https://api.resend.com/emails" : undefined);
+const token = process.env.EMAIL_WEBHOOK_TOKEN ?? resendKey;
 const from = process.env.EMAIL_FROM ?? "Cribbage <onboarding@resend.dev>";
 
 if (!url) {
   console.error(
-    "EMAIL_WEBHOOK_URL is not set, so there is no provider to send through.\n" +
-      "For Resend that is https://api.resend.com/emails — see DEPLOYING.md.",
+    "No mail provider is configured. Set RESEND_API_KEY, or point\n" +
+      "EMAIL_WEBHOOK_URL at a provider that accepts a JSON POST.\n" +
+      "See DEPLOYING.md.",
   );
   process.exit(1);
 }
