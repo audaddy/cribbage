@@ -1757,3 +1757,94 @@ details.disclosure[open] > summary::before { content: "▾ "; }
   height: 1px;
   background: linear-gradient(90deg, transparent, var(--line-strong), transparent);
 }
+
+/* --- table talk ---------------------------------------------------------
+   Two rows of one-tap needling and praise. Sized for a thumb first: these get
+   used one-handed, on a phone, in the ten seconds someone spends on a turn. */
+
+.talk { margin-bottom: 14px; }
+
+.talk-body {
+  display: flex;
+  flex-direction: column;
+  gap: 11px;
+  padding: 13px 14px 14px;
+}
+
+.talk-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.talk-chip {
+  min-height: 34px;
+  padding: 6px 11px;
+  font: inherit;
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--ink-soft);
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  cursor: pointer;
+  transition:
+    transform 0.12s cubic-bezier(0.34, 1.56, 0.64, 1),
+    background-color 0.16s ease,
+    border-color 0.16s ease,
+    color 0.16s ease;
+}
+
+.talk-chip:hover:not(:disabled) {
+  transform: translateY(-1px) scale(1.03);
+  border-color: var(--line-strong);
+  background: var(--surface-3);
+}
+
+/* The needle runs warm, the praise runs green. Tinted at rest, not only on
+   hover: the two rows have to read as two kinds of thing at a glance, and on
+   a touch screen there is no hover to reveal it. */
+.talk-chip--jab {
+  color: color-mix(in srgb, var(--danger) 55%, var(--ink-soft));
+  border-color: color-mix(in srgb, var(--danger) 18%, var(--line));
+  background: color-mix(in srgb, var(--danger) 5%, var(--surface-2));
+}
+
+.talk-chip--props {
+  color: color-mix(in srgb, var(--good) 55%, var(--ink-soft));
+  border-color: color-mix(in srgb, var(--good) 18%, var(--line));
+  background: color-mix(in srgb, var(--good) 5%, var(--surface-2));
+}
+
+.talk-chip--jab:hover:not(:disabled) {
+  color: var(--danger);
+  border-color: color-mix(in srgb, var(--danger) 45%, var(--line));
+  background: color-mix(in srgb, var(--danger) 11%, var(--surface-2));
+}
+
+.talk-chip--props:hover:not(:disabled) {
+  color: var(--good);
+  border-color: color-mix(in srgb, var(--good) 45%, var(--line));
+  background: color-mix(in srgb, var(--good) 11%, var(--surface-2));
+}
+
+.talk-chip:active:not(:disabled) { transform: translateY(0) scale(0.96); }
+
+.talk-chip:disabled { opacity: 0.5; cursor: default; }
+
+/* Sent: a quick pulse, so a tap that travels to a server still feels local. */
+.talk-chip[aria-busy="true"] {
+  animation: talk-sent 0.5s ease;
+  opacity: 1;
+}
+
+@keyframes talk-sent {
+  0% { transform: scale(1); }
+  40% { transform: scale(1.12); background: var(--surface-3); }
+  100% { transform: scale(1); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .talk-chip,
+  .talk-chip[aria-busy="true"] { transition: none; animation: none; }
+}

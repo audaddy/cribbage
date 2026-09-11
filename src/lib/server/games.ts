@@ -29,6 +29,7 @@ import type { GameDetail, GameSummary } from "@/lib/api-types";
 import { prisma } from "./db";
 import { env } from "./env";
 import { notify } from "./notify";
+import { listReactions } from "./reactions";
 
 const INVITE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"; // no I, O, 0, 1
 
@@ -162,13 +163,12 @@ export async function getGameDetail(
 
   // Take the most recent slice, not the oldest: a long game would otherwise
   // show only its opening hands and hide everything that just happened.
-  const events = (
-    await prisma.gameEvent.findMany({
-      where: { gameId },
-      orderBy: { seq: "desc" },
-      take: 400,
-    })
-  ).reverse();
+  const [events, reactions] = await Promise.all([
+    prisma.gameEvent
+      .findMany({ where: { gameId }, orderBy: { seq: "desc" }, take: 400 })
+      .then((rows) => rows.reverse()),
+    listReactions(gameId),
+  ]);
 
   return {
     id: game.id,
@@ -198,6 +198,7 @@ export async function getGameDetail(
         createdAt: event.createdAt.toISOString(),
       };
     }),
+    reactions,
     inviteUrl:
       game.status === "awaiting_opponent" && game.player0Id === userId
         ? `${env.appUrl}/join/${game.inviteCode}`

@@ -36,6 +36,14 @@ export interface LogEntry {
   createdAt: string;
 }
 
+/** One tap of table talk. The wording lives in the reaction catalogue. */
+export interface ReactionEntry {
+  id: string;
+  seat: number;
+  key: string;
+  createdAt: string;
+}
+
 export interface GameDetail {
   id: string;
   status: string;
@@ -46,6 +54,8 @@ export interface GameDetail {
   opponentIsBot: boolean;
   view: PlayerView;
   log: LogEntry[];
+  /** Recent table talk, oldest first. */
+  reactions: ReactionEntry[];
   inviteUrl: string | null;
 }
 

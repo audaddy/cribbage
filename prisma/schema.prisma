@@ -128,6 +128,7 @@ model Game {
 
   events        GameEvent[]
   notifications Notification[]
+  reactions     Reaction[]
 
   @@index([player0Id, status])
   @@index([player1Id, status])
@@ -178,4 +179,26 @@ model Notification {
 
   @@unique([gameId, userId, type, gameVersion])
   @@index([userId, sentAt])
+}
+
+/// Table talk: a tap that says "nice hand" or "that it?".
+///
+/// Deliberately outside the game: reactions carry no points, touch no state
+/// and never bump `Game.version`, so saying something can never collide with
+/// a move or be rejected as a stale write.
+model Reaction {
+  id     String @id @default(cuid())
+  gameId String
+  game   Game   @relation(fields: [gameId], references: [id], onDelete: Cascade)
+
+  /// Seat that said it.
+  seat Int
+  /// Key into the catalogue in src/lib/cribbage/reactions.ts. The text itself
+  /// is not stored: it is not user input, and keeping the key lets the wording
+  /// be rewritten later without editing history.
+  key  String
+
+  createdAt DateTime @default(now())
+
+  @@index([gameId, createdAt])
 }

@@ -3,7 +3,14 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import Link from "next/link";
 import type { GameDetail, MoveRequest } from "@/lib/api-types";
-import { type Card, type PlayedCard as PlayedCardState, type Seat, cardLabel } from "@/lib/cribbage";
+import {
+  type Card,
+  type PlayedCard as PlayedCardState,
+  type Seat,
+  cardLabel,
+  reactionFor,
+  reactionsWithTone,
+} from "@/lib/cribbage";
 import { CribbageBoard } from "./CribbageBoard";
 import { HistoryLog } from "./HistoryLog";
 import { CardBack, PlayingCard, cardName, withCardChips } from "./PlayingCard";
@@ -60,6 +67,10 @@ export function GameClient({ initial }: { initial: GameDetail }) {
     { from: number; cards: CardFlight[] } | null
   >(null);
   const handRef = useRef(detail.view.handNumber);
+  // Seeded from the first payload so opening the game does not replay every
+  // thing already said in it.
+  const seenTalk = useRef(new Set(initial.reactions.map((entry) => entry.id)));
+  const [saying, setSaying] = useState<string | null>(null);
   const wasYourTurn = useRef(detail.view.isYourTurn);
 
   const { view } = detail;
@@ -137,6 +148,45 @@ export function GameClient({ initial }: { initial: GameDetail }) {
       window.removeEventListener("focus", onFocus);
     };
   }, [refresh, view.isYourTurn, view.phase]);
+
+  // Table talk arrives on the same poll as everything else. Only the other
+  // side's is announced — you know what you just said.
+  useEffect(() => {
+    for (const entry of detail.reactions) {
+      if (seenTalk.current.has(entry.id)) continue;
+      seenTalk.current.add(entry.id);
+      if (entry.seat === view.you) continue;
+      const reaction = reactionFor(entry.key);
+      if (reaction) pushToast(`${opponentName}: ${reaction.text}`);
+    }
+  }, [detail.reactions, opponentName, pushToast, view.you]);
+
+  const say = useCallback(
+    async (key: string) => {
+      setSaying(key);
+      try {
+        const response = await fetch(`/api/games/${initial.id}/react`, {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ key }),
+        });
+        if (!response.ok) {
+          const body = await response.json().catch(() => ({}));
+          pushToast(body.error ?? "That did not send.");
+          return;
+        }
+        const next = (await response.json()) as GameDetail;
+        // Your own line is not announced back to you, so mark it seen first.
+        for (const entry of next.reactions) seenTalk.current.add(entry.id);
+        setDetail(next);
+      } catch {
+        pushToast("That did not send.");
+      } finally {
+        setSaying(null);
+      }
+    },
+    [initial.id, pushToast],
+  );
 
   // --- the computer's turn ------------------------------------------------
 
@@ -609,6 +659,9 @@ export function GameClient({ initial }: { initial: GameDetail }) {
         </div>
 
         <aside className="game-side">
+          {detail.opponent && (
+            <TableTalk onSay={say} saying={saying} disabled={saying !== null} />
+          )}
           <div className="panel panel--clip">
             <div className="panel-head">
               <span className="panel-title">History</span>
@@ -630,6 +683,49 @@ export function GameClient({ initial }: { initial: GameDetail }) {
 }
 
 // --- sub-components --------------------------------------------------------
+
+/**
+ * Two rows of one-tap table talk.
+ *
+ * Says nothing about the game and scores nothing; it exists because half of
+ * cribbage is what gets said over the board, and playing a hand a day apart
+ * loses all of it.
+ */
+function TableTalk({
+  onSay,
+  saying,
+  disabled,
+}: {
+  onSay: (key: string) => void;
+  saying: string | null;
+  disabled: boolean;
+}) {
+  return (
+    <div className="panel talk">
+      <div className="panel-head">
+        <span className="panel-title">Say something</span>
+      </div>
+      <div className="talk-body">
+        {(["jab", "props"] as const).map((tone) => (
+          <div className="talk-row" key={tone}>
+            {reactionsWithTone(tone).map((reaction) => (
+              <button
+                key={reaction.key}
+                type="button"
+                className={`talk-chip talk-chip--${tone}`}
+                onClick={() => onSay(reaction.key)}
+                disabled={disabled}
+                aria-busy={saying === reaction.key}
+              >
+                {reaction.label}
+              </button>
+            ))}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
 
 /** A face-down card in the crib, flown from wherever it left the hand. */
 function CribCard({

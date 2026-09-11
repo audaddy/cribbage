@@ -203,6 +203,31 @@ async function main() {
   });
   assert(joined.id === created.id, "both players are in the same game");
 
+  console.log("→ table talk crosses the board");
+  const beforeTalk = await alice.json(`/api/games/${created.id}`);
+  const said = await alice.json(`/api/games/${created.id}/react`, {
+    method: "POST",
+    body: JSON.stringify({ key: "nineteen" }),
+  });
+  assert(said.reactions.length === 1, "the reaction is recorded");
+  assert(said.reactions[0].seat === 0, "it is attributed to the speaker");
+  // The point of keeping reactions out of the game: they cannot lose a race
+  // with a move, because they are not a move.
+  assert(
+    said.version === beforeTalk.version,
+    "saying something does not bump the version",
+  );
+
+  const heard = await bob.json(`/api/games/${created.id}`);
+  assert(heard.reactions.length === 1, "the other player hears it");
+  assert(heard.reactions[0].key === "nineteen", "with the line intact");
+
+  const nonsense = await alice.fetch(`/api/games/${created.id}/react`, {
+    method: "POST",
+    body: JSON.stringify({ key: "'; drop table" }),
+  });
+  assert(nonsense.status === 403, `only known lines are accepted (got ${nonsense.status})`);
+
   console.log("→ a third party cannot see the game");
   const carol = new Player(`carol.${stamp}@example.test`);
   await carol.signIn();

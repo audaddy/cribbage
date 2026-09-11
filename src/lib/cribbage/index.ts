@@ -4,3 +4,4 @@ export * from "./scoring";
 export * from "./pegging";
 export * from "./engine";
 export * from "./view";
+export * from "./reactions";
